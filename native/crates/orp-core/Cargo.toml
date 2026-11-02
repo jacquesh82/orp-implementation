@@ -1,0 +1,23 @@
+[package]
+name = "orp-core"
+description = "ORP protocol (OptiRelay): frames, Reed-Solomon, LT fountain, pairing, encryption, session — port of packages/core"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+# Cryptography (RustCrypto equivalents of the TS WebCrypto primitives).
+p256 = { version = "0.13", default-features = false, features = ["ecdh", "std"] }
+hkdf = "0.12"
+hmac = "0.12"
+sha2 = "0.10"
+aes-gcm = "0.10"
+getrandom = "0.2"
+# deflate-raw (CompressionStream "deflate-raw" on the TS side) through zlib itself
+# (system zlib on Linux, the NDK libz on Android): same stream as the browser.
+flate2 = { version = "1", default-features = false, features = ["zlib"] }
+# fdlibm log: same rounding as V8's Math.log (soliton distribution).
+libm = "0.2"
+
+[dev-dependencies]
+serde_json = "1"

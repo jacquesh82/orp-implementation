@@ -1,0 +1,17 @@
+{
+  "name": "@optirelay/core",
+  "version": "0.1.0",
+  "description": "ORP protocol: messages, session, pairing, encryption, segmentation and fountain codes — no DOM, injected dependencies.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "keywords": ["optirelay", "orp", "optical-relay", "qr", "fountain-code", "typescript"],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lelabnet-creator/mindlog.optiRelay.git"
+  }
+}

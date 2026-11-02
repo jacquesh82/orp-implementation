@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#010101" />
+  <meta name="description" content="OptiRelay moves files from a screen to a camera using TM4 and TM8 temporal modulation, with no transfer network or relay server." />
+  <title>OptiRelay — Light is the only channel</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="preload" href="./src/assets/aspekta-400.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="./src/style.css" />
+  <script type="module" src="./src/main.ts"></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" /></symbol>
+    <symbol id="diagonal" viewBox="0 0 24 24"><path d="M6 18 18 6M6 6h12v12" /></symbol>
+    <symbol id="mark" viewBox="0 0 28 28"><path d="M1 1h10v10H1zM17 1h10v10H17zM1 17h10v10H1z"/><path class="mark-dot" d="M18 18h8v8h-8z"/><path d="M5 5h2v2H5zM21 5h2v2h-2zM5 21h2v2H5z"/></symbol>
+    <symbol id="corners" viewBox="0 0 100 100"><path d="M1 14V1h13m72 0h13v13m0 72v13H86m-72 0H1V86"/></symbol>
+    <symbol id="encode" viewBox="0 0 100 100"><path d="m50 9 33 18v44L50 90 17 71V27zM17 27l33 19 33-19M50 46v44M28 21l34 19v44M39 15l33 19v44M17 42l33 19 33-19M17 57l33 19 33-19"/></symbol>
+    <symbol id="wave" viewBox="0 0 100 100"><path d="M19 5v18c0 13-9 16-9 29s9 15 9 28v15M29 5v18c0 13-9 16-9 29s9 15 9 28v15M39 5v18c0 13-9 16-9 29s9 15 9 28v15M49 5v18c0 13-9 16-9 29s9 15 9 28v15M59 5v18c0 13-9 16-9 29s9 15 9 28v15M69 5v18c0 13-9 16-9 29s9 15 9 28v15M79 5v18c0 13-9 16-9 29s9 15 9 28v15M89 5v18c0 13-9 16-9 29s9 15 9 28v15"/></symbol>
+    <symbol id="capture" viewBox="0 0 100 100"><path d="M12 29V12h17m42 0h17v17m0 42v17H71m-42 0H12V71M32 32h36v36H32zM32 44h36M32 56h36M44 32v36M56 32v36M6 50h88"/><circle cx="50" cy="50" r="36"/></symbol>
+    <symbol id="verify" viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="35" ry="40"/><ellipse cx="50" cy="50" rx="23" ry="40"/><ellipse cx="50" cy="50" rx="10" ry="40"/><path d="M15 50h70M22 26c16 11 40 11 56 0M22 74c16-11 40-11 56 0"/></symbol>
+  </svg>
+  <header class="site-header">
+    <nav class="header-inner frame" aria-label="Main navigation">
+      <a class="brand" href="#" aria-label="OptiRelay, home"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a>
+      <div class="header-links"><a class="nav-link" href="#principle">How it works</a><a class="nav-link" href="./protocol/">Protocol</a></div>
+      <a class="button button-nav" href="./lab/"><span>Try it</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
+    </nav>
+  </header>
+  <main id="content" class="frame main-frame">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="scene" data-wave-field aria-hidden="true"></div>
+      <div class="optical-link" aria-hidden="true">
+        <svg class="optical-art" viewBox="100 0 760 440" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="panel-glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b7e7ff" stop-opacity=".18"/><stop offset=".45" stop-color="#091b37" stop-opacity=".88"/><stop offset="1" stop-color="#7cb8f5" stop-opacity=".18"/></linearGradient>
+            <linearGradient id="panel-edge"><stop stop-color="#e8f6ff" stop-opacity=".85"/><stop offset=".4" stop-color="#658db8" stop-opacity=".3"/><stop offset="1" stop-color="#b3e7ff" stop-opacity=".8"/></linearGradient>
+            <linearGradient id="optical-channel"><stop stop-color="#9fd6ff" stop-opacity=".01"/><stop offset=".55" stop-color="#72b8ff" stop-opacity=".13"/><stop offset="1" stop-color="#d1f1ff" stop-opacity=".3"/></linearGradient>
+            <linearGradient id="panel-reflection"><stop stop-color="white" stop-opacity="0"/><stop offset=".4" stop-color="#c4edff" stop-opacity=".02"/><stop offset=".5" stop-color="white" stop-opacity=".36"/><stop offset=".6" stop-color="#badfff" stop-opacity=".03"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient>
+            <radialGradient id="link-light"><stop stop-color="#7eb9ff" stop-opacity=".2"/><stop offset="1" stop-color="#7eb9ff" stop-opacity="0"/></radialGradient>
+            <clipPath id="send-clip"><rect x="0" y="0" width="250" height="250"/></clipPath>
+            <clipPath id="capture-clip"><rect x="0" y="0" width="180" height="180"/></clipPath>
+          </defs>
+          <ellipse cx="490" cy="235" rx="330" ry="170" fill="url(#link-light)" stroke="none"/>
+          <path d="m435 130 185-1v164l-185 44z" fill="url(#optical-channel)" stroke="none"/>
+          <g stroke="#a2d3ff" stroke-width=".65" opacity=".5"><path d="m435 130 185-1M435 164l185-8M435 199l185-15M435 233l185-22M435 268l185-30M435 302l185-37M435 337l185-44"/></g>
+          <g class="signal-packets" stroke="none"><rect x="442" y="161" width="5" height="5" fill="#c0c040"/><rect x="442" y="230" width="5" height="5" fill="#40c0c0"/><rect x="442" y="298" width="5" height="5" fill="#c040c0"/></g>
+          <g class="signal-packets signal-packets-late" stroke="none"><rect x="442" y="196" width="4" height="4" fill="#c0c0c0"/><rect x="442" y="265" width="4" height="4" fill="#40c040"/></g>
+          <g transform="matrix(1 .18 0 1 149 32)" opacity=".35"><rect width="250" height="250" fill="url(#panel-glass)" stroke="url(#panel-edge)" stroke-width=".8"/><path d="M10 42h230M10 208h230" stroke="#92bdea" stroke-width=".4"/></g>
+          <g transform="matrix(1 .18 0 1 167 48)" opacity=".5"><rect width="250" height="250" fill="url(#panel-glass)" stroke="url(#panel-edge)" stroke-width=".8"/><image data-optical-mode="tm4" data-subframe="payload" href="./src/assets/frame-tm4-payload.svg" x="20" y="20" width="210" height="210" opacity=".2"/></g>
+          <g transform="matrix(1 .18 0 1 185 64)">
+            <rect x="-9" y="-9" width="268" height="268" fill="url(#panel-glass)" stroke="url(#panel-edge)" stroke-width="1"/>
+            <rect width="250" height="250" fill="#061023" stroke="none"/>
+            <image data-optical-mode="tm8" data-subframe="reference" href="./src/assets/frame-tm8-reference.svg" width="250" height="250"/>
+            <image class="matrix-payload" data-optical-mode="tm8" data-subframe="payload" href="./src/assets/frame-tm8-payload.svg" width="250" height="250"/>
+            <g clip-path="url(#send-clip)"><rect class="reflection-sweep" x="-100" y="0" width="250" height="250" fill="url(#panel-reflection)" stroke="none"/></g>
+            <path d="M-14 24v-38h38m202 0h38v38m0 202v38h-38m-202 0h-38v-38" stroke="#d4ecff" stroke-width="1" fill="none" opacity=".75"/>
+          </g>
+          <g transform="matrix(1 -.14 0 1 620 126)">
+            <rect x="-12" y="-12" width="204" height="204" fill="url(#panel-glass)" stroke="url(#panel-edge)" stroke-width=".85"/>
+            <rect width="180" height="180" fill="#061123" stroke="none"/>
+            <image data-optical-mode="tm8" data-subframe="reference" href="./src/assets/frame-tm8-reference.svg" x="13" y="13" width="154" height="154" opacity=".88"/>
+            <image class="matrix-payload received-payload" data-optical-mode="tm8" data-subframe="payload" href="./src/assets/frame-tm8-payload.svg" x="13" y="13" width="154" height="154" opacity=".88"/>
+            <g clip-path="url(#capture-clip)"><rect class="capture-scan" y="18" width="180" height="1" fill="#c0edff" stroke="none"/><rect class="capture-scan" y="13" width="180" height="11" fill="#99d7ff" opacity=".15" stroke="none"/></g>
+            <path d="M-18 21v-39h39m138 0h39v39m0 138v39h-39m-138 0h-39v-39" stroke="#b6dcff" stroke-width="1.2" fill="none"/>
+          </g>
+          <g fill="#d6e7fb" stroke="none" font-family="Mono,monospace" font-size="10" letter-spacing="1"><text x="180" y="386">TRANSMIT · TM4 / TM8</text><text x="617" y="354">CAMERA CAPTURE</text></g>
+          <path d="M460 371h132m-7-5 7 5-7 5" stroke="#b7d9ff" stroke-width=".8"/>
+          <text x="470" y="398" fill="#a8c6ea" stroke="none" font-family="Mono,monospace" font-size="8" letter-spacing="1">CHANNEL ILLUSTRATION</text>
+        </svg>
+      </div>
+      <button class="motion-toggle" type="button" aria-label="Pause animations" aria-pressed="false" hidden><span class="motion-icon" aria-hidden="true">Ⅱ</span><span class="motion-label">Pause</span></button>
+      <div class="hero-copy">
+        <p class="tag">Optical transfer · TM4 / TM8</p>
+        <h1 id="hero-title">Light is the only channel.</h1>
+        <p class="hero-description">Move files from a screen to a camera, with no network or relay server.</p>
+        <div class="hero-actions"><a class="button button-white" href="./lab/"><span>Try it live</span><svg aria-hidden="true"><use href="#arrow" /></svg></a><a class="button button-outline" href="#principle"><span>How it works</span><svg aria-hidden="true"><use href="#arrow" /></svg></a></div>
+      </div>
+    </section>
+    <section class="bridge" aria-label="A direct channel between your devices">
+      <svg class="bridge-mark" aria-hidden="true"><use href="#mark" /></svg>
+      <p class="tag tag-gray">Temporal modulation · TM4 / TM8</p>
+      <div class="bridge-components"><span>A screen</span><span>A camera</span><span>Your file</span></div>
+      <p class="tag tag-gray">No Wi-Fi · No Bluetooth · No relay server</p>
+    </section>
+    <section class="principle" id="principle" aria-labelledby="principle-title">
+      <div class="principle-intro"><div class="intro-content"><p class="tag">The principle · TM4 / TM8</p><h2 id="principle-title">The file changes form.<br />Light makes the connection.</h2><p class="section-description">With TM4 and TM8, OptiRelay turns data into optical matrices. A reference image, then a payload image: the camera reads their difference to reconstruct the file.</p><a class="button button-outline" href="./protocol/"><span>Explore the protocol</span><svg aria-hidden="true"><use href="#arrow" /></svg></a></div></div>
+      <ol class="steps">
+        <li class="step"><div class="step-content"><div class="step-symbol" aria-hidden="true"><svg class="symbol-corners"><use href="#corners" /></svg><svg class="wire-symbol"><use href="#encode" /></svg><span class="step-number">01</span></div><h3>Prepare · TM4</h3><p>The first exchange uses TM4, the more robust mode. Both devices prepare the optical session.</p></div></li>
+        <li class="step"><div class="step-content"><div class="step-symbol" aria-hidden="true"><svg class="symbol-corners"><use href="#corners" /></svg><svg class="wire-symbol"><use href="#wave" /></svg><span class="step-number">02</span></div><h3>Display · TM4 / TM8</h3><p>TM4 carries 2 bits per module; TM8 carries 3. Each frame alternates a reference subframe and a payload subframe.</p></div></li>
+        <li class="step"><div class="step-content"><div class="step-symbol" aria-hidden="true"><svg class="symbol-corners"><use href="#corners" /></svg><svg class="wire-symbol"><use href="#capture" /></svg><span class="step-number">03</span></div><h3>Capture</h3><p>The camera reads the difference between the two subframes. The receiver collects the data and reconstructs the file.</p></div></li>
+        <li class="step"><div class="step-content"><div class="step-symbol" aria-hidden="true"><svg class="symbol-corners"><use href="#corners" /></svg><svg class="wire-symbol"><use href="#verify" /></svg><span class="step-number">04</span></div><h3>Verify</h3><p>The reconstructed stream is checked against its SHA-256 digest before the file is made available.</p></div></li>
+      </ol>
+      <figure class="convergence" aria-labelledby="convergence-caption"><div class="convergence-art" aria-hidden="true"></div><figcaption id="convergence-caption"><svg aria-hidden="true"><use href="#corners" /></svg><span>A screen. A camera.</span><strong>Light is the only channel.</strong><span>Device to device.</span></figcaption></figure>
+    </section>
+    <section id="try" class="resources" aria-labelledby="resources-title">
+      <div class="plus-divider" aria-hidden="true">+<span>+</span>+<span>+</span>+<span>+</span>+<span>+</span>+<span>+</span>+<span>+</span>+<span>+</span>+</div>
+      <div class="resources-content"><div class="resources-heading"><div><p class="tag tag-gray">Experiment · TM4 / TM8</p><h2 id="resources-title">See the signal.<br />Try the transfer.</h2></div><p>A test bench to explore TM4 and TM8, measure the optical channel and move a file between your devices.</p></div>
+        <ul class="resource-list"><li><a href="./lab/"><span class="resource-tag">Browser</span><span class="resource-title">Open the test bench</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./protocol/#tm4"><span class="resource-tag">TM4</span><span class="resource-title">Explore TM4</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./protocol/#tm8"><span class="resource-tag">TM8</span><span class="resource-title">Explore TM8</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./download/optirelay.apk" download="optirelay.apk"><span class="resource-tag">Android</span><span class="resource-title">Download the Android app</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li></ul>
+        <p id="apk-info" class="download-meta">Android APK · Install on your receiving device to use its camera.</p>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer frame"><div class="footer-strip"><p>A research project by LeLab</p><a class="brand" href="#" aria-label="OptiRelay, back to top"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a><a class="tag tag-gray" href="./protocol/">ORP protocol <span aria-hidden="true">↗</span></a></div><div class="footer-field" data-wave-field data-wave-reverse aria-hidden="true"></div></footer>
+</body>
+</html>

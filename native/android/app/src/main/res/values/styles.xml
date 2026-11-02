@@ -1,0 +1,7 @@
+<resources>
+    <!-- Light background from launch: no dark flash before the first Slint
+         render; status bar icons are set by MainActivity. -->
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

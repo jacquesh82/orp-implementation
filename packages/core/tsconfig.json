@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "types": [],
+    // lib DOM : pour les TYPES plateforme uniquement (WebCrypto, CompressionStream,
+    // TextEncoder). Aucun code de core ne touche window/document — la preuve est
+    // que toute la suite de tests tourne dans Node, où ils n'existent pas (F-16).
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

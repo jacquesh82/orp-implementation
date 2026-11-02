@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101418" />
+    <title>OptiRelay Lab — TM4 / TM8</title>
+    <link rel="stylesheet" href="./src/style.css" />
+    <script type="module" src="./src/main.ts"></script>
+  </head>
+  <body>
+    <dialog id="fullscreen" class="sending" aria-labelledby="send-title">
+      <div class="send-header">
+        <h2 id="send-title">Sending</h2>
+        <button type="button" class="button stop" id="stop-send">Stop</button>
+      </div>
+      <div class="send-body" id="send-body"></div>
+    </dialog>
+
+    <dialog id="preview-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-header">
+        <h2 id="dialog-title">Preview</h2>
+        <button type="button" class="round" id="close-preview" aria-label="Close preview">
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="dialog-body" id="dialog-body"></div>
+    </dialog>
+
+    <!-- Site menu (served by the showcase under /lab/): the same as on the home page. -->
+    <header class="site-nav" id="site-nav" hidden>
+      <nav class="site-nav-inner" aria-label="Site navigation">
+        <a class="site-brand" href="../" aria-label="OptiRelay, home">
+          <svg viewBox="0 0 28 28" aria-hidden="true"><path d="M1 1h10v10H1zM17 1h10v10H17zM1 17h10v10H1z"/><path class="site-dot" d="M18 18h8v8h-8z"/><path d="M5 5h2v2H5zM21 5h2v2h-2zM5 21h2v2H5z"/></svg>
+          <span>OptiRelay</span>
+        </a>
+        <div class="site-links">
+          <a class="site-link" href="../#principle">How it works</a>
+          <a class="site-link" href="../protocol/">Protocol</a>
+        </div>
+        <a class="site-button" href="./" aria-current="page"><span>Try it</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+      </nav>
+    </header>
+
+    <div class="page">
+      <header class="bar">
+        <div class="bar-top">
+          <strong>OptiRelay Lab</strong>
+          <span class="mono soft">TM4 / TM8</span>
+          <a id="app-link" href="../app/index.html" hidden>Back to the app</a>
+        </div>
+        <nav class="tabs" role="tablist" aria-label="Test bench sections">
+          <button type="button" role="tab" id="tab-diag" aria-controls="panel-diag" aria-selected="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Diagnostics
+          </button>
+          <button type="button" role="tab" id="tab-transfer" aria-controls="panel-transfer" aria-selected="false" tabindex="-1">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Transfer test
+            <span class="arrival-dot" id="arrival-dot" hidden aria-label="File received"></span>
+          </button>
+        </nav>
+      </header>
+
+      <p class="alert-context" id="alert-context" role="alert" hidden></p>
+
+      <!-- Single camera block, moved into the active tab. -->
+      <div id="camera-reserve" hidden>
+        <div class="camera" id="camera">
+          <video id="video" playsinline muted poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
+          <canvas id="overlay"></canvas>
+          <span class="camera-chip" id="lock-chip" hidden>white balance + exposure locked</span>
+          <button type="button" class="button primary open-camera" id="open-cam">Open camera</button>
+        </div>
+      </div>
+
+      <!-- ── Diagnostic tab ───────────────────────────────────────────── -->
+      <main id="panel-diag" role="tabpanel" aria-labelledby="tab-diag" class="panel">
+        <section class="card calibration" aria-labelledby="calibration-title">
+          <div class="stack tight">
+            <h2 id="calibration-title">Automatic calibration</h2>
+            <p class="help">Finds the subframe duration and mosaic that give the best throughput for THIS screen → phone pair. The bench plays a series of 7 short trials (≈ 25 s); the phone films it in slow motion, measures each trial and gives a short code to enter here.</p>
+          </div>
+          <div class="calibration-steps">
+            <div class="calibration-step">
+              <h3><span>1</span> On the sending screen</h3>
+              <button type="button" class="button primary" id="calibrate-send">Send the calibration series</button>
+              <p class="help">Full screen, 4 s countdown, then 67 → 17 ms and 1 grid → 3 × 3.</p>
+            </div>
+            <div class="calibration-step">
+              <h3><span>2</span> On the phone</h3>
+              <div class="row">
+                <button type="button" class="button primary" id="calibrate-film">Film the series</button>
+                <label class="button" for="calibrate-video">Import a video</label>
+                <input type="file" id="calibrate-video" accept="video/*" hidden />
+              </div>
+              <p class="help" id="calibrate-state" aria-live="polite">Start filming during the countdown, with the sending screen in frame; it stops on its own.</p>
+            </div>
+            <div class="calibration-step">
+              <h3><span>3</span> Back on the sender</h3>
+              <form class="row" id="calibrate-form">
+                <label for="calibrate-code" class="visually-hidden">Calibration code</label>
+                <input id="calibrate-code" class="code-field mono" placeholder="33-2" autocomplete="off" inputmode="text" maxlength="8" />
+                <button type="submit" class="button">Apply</button>
+              </form>
+              <p class="help" id="calibrate-applied" aria-live="polite"></p>
+            </div>
+          </div>
+          <div id="calibrate-results" hidden>
+            <table class="calibration-table">
+              <caption class="visually-hidden">Results per trial</caption>
+              <thead><tr><th scope="col">Trial</th><th scope="col">Frames read</th><th scope="col">Share</th><th scope="col">Useful throughput</th></tr></thead>
+              <tbody id="calibrate-lines"></tbody>
+            </table>
+            <p class="recommendation" id="calibrate-advice" role="status"></p>
+          </div>
+        </section>
+        <section class="card sender" aria-labelledby="sender-title">
+          <div class="stack tight">
+            <h2 id="sender-title">Sender · fixed frame</h2>
+            <p class="help">Content known on both sides: each pair is compared byte for byte.</p>
+          </div>
+          <div class="group">
+            <span class="label" id="sender-mode-label">Mode</span>
+            <div class="segments" role="radiogroup" aria-labelledby="sender-mode-label" id="sender-modes">
+              <button type="button" role="radio" aria-checked="true" data-value="3">TM8 · 3 bits</button>
+              <button type="button" role="radio" aria-checked="false" data-value="2">TM4 · robust</button>
+            </div>
+          </div>
+          <div class="group">
+            <span class="label" id="period-label">Subframe duration</span>
+            <div class="segments mono" role="radiogroup" aria-labelledby="period-label" id="periods">
+              <button type="button" role="radio" aria-checked="false" data-value="150">150 ms</button>
+              <button type="button" role="radio" aria-checked="true" data-value="250">250 ms</button>
+              <button type="button" role="radio" aria-checked="false" data-value="400">400 ms</button>
+            </div>
+          </div>
+          <div class="previews">
+            <figure><canvas id="preview-r" aria-label="Reference subframe"></canvas><figcaption><b>R</b> grey reference</figcaption></figure>
+            <figure><canvas id="preview-p" aria-label="Payload subframe"></canvas><figcaption><b>P</b> payload</figcaption></figure>
+          </div>
+          <button type="button" id="show" class="button primary">Show the fixed frame</button>
+          <p class="help" id="frame-help"></p>
+        </section>
+
+        <div class="column">
+          <section class="card" aria-labelledby="capture-title">
+            <div class="capture">
+              <div>
+                <h2 id="capture-title">Capture</h2>
+                <div class="camera-slot" id="slot-diag"></div>
+                <p class="advice" id="advice" role="status"></p>
+                <div class="row">
+                  <button type="button" id="relock" class="button">Re-lock</button>
+                  <button type="button" id="unlock" class="button">Back to auto</button>
+                  <select id="sensor" hidden aria-label="Camera sensor"></select>
+                  <label id="zone-zoom" hidden>zoom <input type="range" id="zoom" min="100" max="400" value="100" /></label>
+                </div>
+              </div>
+              <div>
+                <div class="group">
+                  <span class="label" id="capture-mode-label">Expected mode</span>
+                  <div class="segments" role="radiogroup" aria-labelledby="capture-mode-label" id="modes-capture">
+                    <button type="button" role="radio" aria-checked="true" data-value="3">TM8</button>
+                    <button type="button" role="radio" aria-checked="false" data-value="2">TM4</button>
+                  </div>
+                </div>
+                <div class="kpis">
+                  <div class="kpi"><span>Valid frames</span><b id="kpi-valid">—</b></div>
+                  <div class="kpi"><span>Confidence</span><b id="kpi-confidence">—</b></div>
+                  <div class="kpi"><span>Uncertain</span><b id="kpi-uncertain">—</b></div>
+                  <div class="kpi"><span>Soft accumulation</span><b id="kpi-total">—</b></div>
+                </div>
+                <dl class="diagnostic">
+                  <dt>Gains r · g · b</dt><dd id="diag-gains">—</dd>
+                  <dt>Crosstalk</dt><dd id="diag-crosstalk">—</dd>
+                  <dt>Pilot noise</dt><dd id="diag-noise">—</dd>
+                  <dt>Perspective</dt><dd id="diag-perspective">—</dd>
+                  <dt>Module</dt><dd id="diag-module">—</dd>
+                  <dt>Saturation</dt><dd id="diag-saturation">—</dd>
+                  <dt>Mixed subframes</dt><dd id="diag-mixed">—</dd>
+                  <dt>Wrong bytes (last)</dt><dd id="diag-bytes">—</dd>
+                </dl>
+                <label class="checkbox"><input type="checkbox" id="loop" checked /> continuous decoding</label>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" aria-label="Report">
+            <div class="row">
+              <button type="button" id="report" class="button black">Report (16 pairs)</button>
+              <button type="button" id="reset" class="button">Reset</button>
+              <p id="verdict" role="status"></p>
+            </div>
+          </section>
+
+          <details class="log">
+            <summary>Log</summary>
+            <pre id="output">ready.</pre>
+          </details>
+        </div>
+      </main>
+
+      <!-- ── Transfer test tab ────────────────────────────────────────── -->
+      <main id="panel-transfer" role="tabpanel" aria-labelledby="tab-transfer" class="panel" hidden>
+        <section class="card send" aria-labelledby="send-card-title">
+          <div class="title-icon">
+            <span class="icon blue" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <h2 id="send-card-title">Send from this screen</h2>
+          </div>
+          <label class="drop" id="file-zone" for="bench-file">
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            <span class="stack tight">
+              <span class="drop-title" id="file-name">Choose a file</span>
+              <span class="help" id="file-help">an image, some text, a small document</span>
+            </span>
+            <input type="file" id="bench-file" class="invisible" />
+          </label>
+          <div class="group">
+            <span class="label" id="send-mode-label">Mode</span>
+            <div class="segments" role="radiogroup" aria-labelledby="send-mode-label" id="send-modes">
+              <button type="button" role="radio" aria-checked="true" data-value="3">TM8 · 3 bits</button>
+              <button type="button" role="radio" aria-checked="false" data-value="2">TM4 · robust</button>
+            </div>
+          </div>
+          <div class="group">
+            <span class="label" id="send-period-label">Subframe duration</span>
+            <div class="segments mono" role="radiogroup" aria-labelledby="send-period-label" id="send-periods">
+              <button type="button" role="radio" aria-checked="false" data-value="8" hidden>8</button>
+              <button type="button" role="radio" aria-checked="false" data-value="17">17</button>
+              <button type="button" role="radio" aria-checked="false" data-value="33">33</button>
+              <button type="button" role="radio" aria-checked="false" data-value="67">67</button>
+              <button type="button" role="radio" aria-checked="false" data-value="100">100</button>
+              <button type="button" role="radio" aria-checked="true" data-value="150">150</button>
+              <button type="button" role="radio" aria-checked="false" data-value="250">250 ms</button>
+            </div>
+            <p class="help">Live, the phone must analyse at least one image per subframe: ≈ 100 ms for 1 grid, 150 ms or more for 3 × 3. 17 and 33 ms (one or two screen refreshes): only when filmed in slow motion (240 fps), then “Import a video”.</p>
+          </div>
+          <div class="group">
+            <span class="label" id="mosaic-label">Mosaic</span>
+            <div class="segments" role="radiogroup" aria-labelledby="mosaic-label" id="mosaics">
+              <button type="button" role="radio" aria-checked="false" data-value="1">1 grid</button>
+              <button type="button" role="radio" aria-checked="true" data-value="2">2 × 2</button>
+              <button type="button" role="radio" aria-checked="false" data-value="3">3 × 3</button>
+              <button type="button" role="radio" aria-checked="false" data-value="4">4 × 4</button>
+            </div>
+            <p class="help">Several frames per screen: throughput multiplied, but smaller modules — bring the phone closer. 4 × 4 and beyond: 4K receiver.</p>
+          </div>
+          <div class="group">
+            <span class="label" id="delay-label">Start delay</span>
+            <div class="segments mono" role="radiogroup" aria-labelledby="delay-label" id="delays">
+              <button type="button" role="radio" aria-checked="false" data-value="0">0 s</button>
+              <button type="button" role="radio" aria-checked="false" data-value="3">3 s</button>
+              <button type="button" role="radio" aria-checked="true" data-value="5">5 s</button>
+              <button type="button" role="radio" aria-checked="false" data-value="10">10 s</button>
+            </div>
+            <p class="help">Time to pick up the phone: the screen shows the initialization code during the countdown.</p>
+          </div>
+          <div class="group">
+            <span class="label" id="send-window-label">Display</span>
+            <div class="segments" role="radiogroup" aria-labelledby="send-window-label" id="send-windows">
+              <button type="button" role="radio" aria-checked="true" data-value="page">In this page</button>
+              <button type="button" role="radio" aria-checked="false" data-value="window">New window, full screen</button>
+            </div>
+            <p class="help">The new window can go to another screen, the one you film. It switches to full screen by itself or on the first click in it (F key); closing it stops the sending.</p>
+          </div>
+          <p class="help">Estimate: <b class="mono" id="estimate">choose a file</b></p>
+          <button type="button" id="send-file" class="button primary" disabled>Send</button>
+          <p class="error" id="send-error" role="alert" hidden></p>
+        </section>
+
+        <section class="card receive" aria-labelledby="receive-card-title">
+          <div class="receive-camera">
+            <div class="title-icon">
+              <span class="icon amber" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <h2 id="receive-card-title">Receive through the camera</h2>
+            </div>
+            <div class="camera-slot" id="slot-transfer"></div>
+            <p class="advice" id="transfer-advice" role="status"></p>
+            <div class="import-video">
+              <button type="button" class="button primary" id="bench-film">Film in slow motion</button>
+              <label class="button" for="bench-video">Import a video</label>
+              <input type="file" id="bench-video" accept="video/*" hidden />
+              <p class="help" id="video-state" aria-live="polite">The phone films the transmission in slow motion (240 fps in the APK), then reads every image offline: 17 or 33 ms subframes become possible.</p>
+            </div>
+          </div>
+
+          <div class="receive-state">
+            <p class="transfer-status" id="transfer-state" role="status" aria-live="polite"></p>
+            <div id="waiting-state" class="waiting">
+              <p>Waiting for a transfer.</p>
+              <p class="help">On the other device: “Transfer test” tab, choose a file, “Send”. You can aim at any time: the initialization code comes back regularly.</p>
+              <p class="help">A missed frame is never resent: each frame carries a fresh combination of the file's blocks (fountain code), and the next ones replace it. Receiving slightly more frames than there are blocks is enough, whichever they are.</p>
+            </div>
+            <div id="running-state" class="stack" hidden>
+              <div class="title-line">
+                <span class="name" id="transfer-name">—</span>
+                <span class="mono big" id="transfer-percent">0 %</span>
+              </div>
+              <p class="help">Session code <b class="mono code-session" id="transfer-sas">— —</b>: the same as on the sending screen. The app receiving from the bench shows this same code on its own. It proves you are reading the same transfer; it is not authentication: the bench pairs with a public phrase.</p>
+              <div class="thick-bar" role="progressbar" aria-label="Transfer progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="transfer-bar"><div id="transfer-fill"></div></div>
+              <div class="kpis">
+                <div class="kpi"><span>Useful throughput</span><b id="transfer-throughput">—</b></div>
+                <div class="kpi"><span>Received</span><b id="transfer-bytes">—</b></div>
+                <div class="kpi"><span>Remaining</span><b id="transfer-remaining">—</b></div>
+                <div class="kpi"><span>Frames read / lost</span><b id="transfer-frames">—</b></div>
+              </div>
+              <div class="histogram" id="histogram" aria-hidden="true"></div>
+              <p class="help">Throughput over the last 30 seconds · <span class="legend blue">frames read</span> · <span class="legend amber">lost (captured mid-switch, blur)</span></p>
+              <div class="row"><button type="button" class="button danger" id="abort">Abort</button></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card arrival" id="arrival" hidden aria-labelledby="arrival-title">
+          <div class="arrival-preview">
+            <div class="preview-frame" id="preview-frame"></div>
+            <div class="row">
+              <button type="button" class="button" id="enlarge">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Enlarge preview
+              </button>
+              <button type="button" class="button" id="copy" hidden>Copy text</button>
+            </div>
+          </div>
+          <div class="arrival-info">
+            <div class="title-icon">
+              <span class="icon green" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <div class="stack tight">
+                <h2 id="arrival-title">Received and verified</h2>
+                <span class="help">SHA-256 fingerprint matches the announced one</span>
+              </div>
+            </div>
+            <dl class="meta">
+              <dt>File</dt><dd id="arrival-name">—</dd>
+              <dt>Type</dt><dd class="mono" id="arrival-type">—</dd>
+              <dt>Size</dt><dd class="mono" id="arrival-size">—</dd>
+            </dl>
+            <div class="kpis">
+              <div class="kpi"><span>Duration</span><b id="arrival-duration">—</b></div>
+              <div class="kpi"><span>Average throughput</span><b id="arrival-throughput">—</b></div>
+              <div class="kpi"><span>Frames read</span><b id="arrival-frames">—</b></div>
+              <div class="kpi"><span>Mode</span><b id="arrival-mode">—</b></div>
+            </div>
+            <p class="help">Nothing is opened or imported automatically: the preview stays on this page.</p>
+            <div class="row actions">
+              <button type="button" class="button primary big" id="save">
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Save
+              </button>
+              <button type="button" class="button big" id="share" hidden>Share</button>
+              <button type="button" class="button big" id="new-transfer">New transfer</button>
+            </div>
+            <p class="save-status" id="arrival-status" role="status" hidden></p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

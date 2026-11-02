@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "types": [],
+    // lib DOM : types plateforme seulement (Uint8ClampedArray des images) —
+    // aucun code ne touche window/document, toute la suite tourne dans Node.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

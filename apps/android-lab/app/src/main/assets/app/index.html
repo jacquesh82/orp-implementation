@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101418" />
+    <title>OptiRelay — secure optical transfer</title>
+    <meta name="description" content="Secure device-to-device optical transfer: files sent screen to camera with TM4/TM8 time modulation, no network." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <script type="module" crossorigin src="./assets/index-BF98Ra-I.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DTq5RIfl.css">
+  </head>
+  <body>
+    <dialog id="preview-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-header">
+        <h2 id="dialog-title">Preview</h2>
+        <button type="button" class="light-round" id="close-preview" aria-label="Close preview">
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="dialog-body" id="dialog-body"></div>
+    </dialog>
+    <div class="alert" id="alert" role="alert" hidden>
+      <span id="alert-text"></span>
+      <button type="button" class="round small-round" id="alert-close" aria-label="Dismiss message">
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <!-- ── Light views: bar + content + footer ──────────────────────────── -->
+    <header class="bar" id="bar">
+      <div class="container bar-content">
+        <button type="button" class="icon-button android-only" id="open-drawer" aria-label="Open menu" aria-controls="drawer" aria-expanded="false">
+          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <a class="brand" href="./" aria-label="OptiRelay — home">
+          <span>OptiRelay</span>
+        </a>
+        <span class="protocol mono">TM4 / TM8</span>
+        <span class="badge ok" id="offline-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Works offline
+        </span>
+        <div class="links">
+          <button type="button" class="link" id="log-button" aria-expanded="false" aria-controls="log">Log</button>
+        </div>
+      </div>
+      <nav class="container tabs" aria-label="Main navigation">
+        <a href="./" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v18M4 7l4-4 4 4M16 21V3M12 17l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Transfer</a>
+        <a id="bench-link" href="../lab/"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Test bench</a>
+      </nav>
+    </header>
+
+    <!-- Android: side menu (navigation drawer, Material 3) -->
+    <dialog class="drawer" id="drawer" aria-label="Menu">
+      <div class="drawer-header">
+        <span class="brand">
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4.5" y="4.5" width="4" height="4" fill="currentColor"/><rect x="16" y="1" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"/><rect x="19.5" y="4.5" width="4" height="4" fill="currentColor"/><rect x="1" y="16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4.5" y="19.5" width="4" height="4" fill="currentColor"/><rect x="18" y="18" width="7" height="7" fill="var(--accent)"/></svg>
+          <span>OptiRelay</span>
+        </span>
+      </div>
+      <nav class="drawer-list" aria-label="Main menu">
+        <button type="button" class="drawer-item" data-tab="receive"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Receive</span></button>
+        <button type="button" class="drawer-item" data-tab="send"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Send</span></button>
+        <a class="drawer-item" href="../lab/index.html"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 15h9" stroke="currentColor" stroke-width="2"/></svg><span>Test bench</span></a>
+        <hr />
+        <button type="button" class="drawer-item" id="drawer-log"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 10h8M8 14h8M8 18h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Log</span></button>
+      </nav>
+      <div class="drawer-footer">
+        <p class="badge ok"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Works offline</p>
+        <p>No telemetry</p>
+        <p>Nothing is imported without your consent</p>
+        <p class="mono">ORP v0.1 · TM4/TM8</p>
+      </div>
+    </dialog>
+
+    <main id="main">
+      <!-- Home -->
+      <section class="screen container" id="home-screen" aria-labelledby="home-title">
+        <div class="card intro">
+          <h1 id="home-title">Transfer from a screen to a camera.</h1>
+          <p>No Wi-Fi, no Bluetooth, no server. The two devices recognize each other through a code you compare, then the file travels through the image, encrypted and verified byte for byte.</p>
+        </div>
+        <div class="choice">
+          <section class="card send-card" aria-labelledby="send-card-title">
+            <div class="card-title">
+              <span class="icon blue" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+              <h2 id="send-card-title">Send from this screen</h2>
+            </div>
+            <label class="drop" id="drop" for="file">
+              <svg width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="drop-content">
+                <span class="drop-title" id="drop-title">Drop a file here</span>
+                <span class="drop-help" id="drop-help">or <u>browse</u>: a text, a key, a small document</span>
+              </span>
+              <input id="file" type="file" class="invisible" />
+            </label>
+            <div class="group">
+              <span class="label" id="mode-title">Optical mode</span>
+              <div class="segments" role="radiogroup" aria-labelledby="mode-title" id="modes">
+                <button type="button" role="radio" aria-checked="true" data-mode="auto">Auto</button>
+                <button type="button" role="radio" aria-checked="false" data-mode="tm8">TM8 · fast</button>
+                <button type="button" role="radio" aria-checked="false" data-mode="tm4">TM4 · robust</button>
+              </div>
+              <p class="help" id="mode-help">TM8 first; while sending, a button switches to TM4 if the phone struggles.</p>
+            </div>
+            <div class="group">
+              <span class="label" id="grids-title">Grids on screen</span>
+              <div class="segments" role="radiogroup" aria-labelledby="grids-title" id="grids">
+                <button type="button" role="radio" aria-checked="false" data-columns="1">1</button>
+                <button type="button" role="radio" aria-checked="true" data-columns="2">2 × 2</button>
+                <button type="button" role="radio" aria-checked="false" data-columns="3">3 × 3</button>
+                <button type="button" role="radio" aria-checked="false" data-columns="4">4 × 4</button>
+              </div>
+              <p class="help">Several frames at once: up to sixteen times faster, but the phone must be closer to the screen. Beyond 3 × 3, you need a receiver that films in 4K.</p>
+              <p class="module-alert" id="grids-alert" role="status" hidden></p>
+            </div>
+            <div class="group">
+              <span class="label" id="period-title">Subframe duration</span>
+              <div class="segments" role="radiogroup" aria-labelledby="period-title" id="periods">
+                <button type="button" role="radio" aria-checked="true" data-period="250">250 ms</button>
+                <button type="button" role="radio" aria-checked="false" data-period="100">100</button>
+                <button type="button" role="radio" aria-checked="false" data-period="33">33</button>
+                <button type="button" role="radio" aria-checked="false" data-period="17">17</button>
+                <button type="button" role="radio" aria-checked="false" data-period="8" hidden>8</button>
+              </div>
+              <p class="help" id="period-help">250 ms can be read live by any phone. 33 ms and below: film in slow-mo.</p>
+            </div>
+            <form class="group code-calibration" id="calibration-form">
+              <label class="label" for="calibration-code">Calibration code</label>
+              <div class="code-line">
+                <input id="calibration-code" class="mono" inputmode="text" autocomplete="off" placeholder="33-3" maxlength="6" aria-describedby="calibration-help" />
+                <button type="submit" class="button">Apply</button>
+              </div>
+              <p class="help" id="calibration-help" aria-live="polite">The code from the test bench calibration sets the duration and the mosaic in one go.</p>
+            </form>
+            <button type="button" class="button primary" id="start" disabled>
+              Start sending
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </section>
+
+          <section class="card receive-card" aria-labelledby="receive-card-title">
+            <div class="card-title">
+              <span class="icon amber" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
+              <h2 id="receive-card-title">Receive with the camera</h2>
+            </div>
+            <p class="soft-text">On a phone, the rear camera reads better; white balance and exposure are locked as soon as the grid is in frame.</p>
+            <div class="camera-preview">
+              <button type="button" class="button primary" id="receive">Open camera</button>
+            </div>
+            <ol class="simple-steps">
+              <li><span>1</span>Aim at the sending screen: get the three large corner squares in frame.</li>
+              <li><span>2</span>Show your screen to the sender, then compare the 6-digit code.</li>
+              <li><span>3</span>Aim again and keep the device still until the end.</li>
+            </ol>
+          </section>
+        </div>
+      </section>
+
+      <!-- Pairing on the sender side -->
+      <section class="screen container" id="pairing-screen" hidden aria-labelledby="pairing-title">
+        <div class="stream-header">
+          <button type="button" class="link back" id="cancel-pairing">
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Cancel
+          </button>
+          <span class="file-summary"><strong id="pairing-name">—</strong> <span id="pairing-size"></span></span>
+          <ol class="steps" aria-label="Steps">
+            <li data-step="1" class="done">1 Code shown</li>
+            <li data-step="2">2 Reply read</li>
+            <li data-step="3">3 Verification</li>
+            <li data-step="4">4 Transfer</li>
+          </ol>
+        </div>
+        <h1 id="pairing-title" class="visually-hidden">Pairing</h1>
+        <div class="two-columns">
+          <section class="card center" aria-labelledby="init-code-title">
+            <h2 id="init-code-title">Initialization code</h2>
+            <canvas id="canvas-code-init" class="grid" aria-label="Animated initialization code, for the phone to aim at"></canvas>
+            <p class="soft-text small">Read by the phone. It contains your public key, never the file.</p>
+          </section>
+          <div class="stack">
+            <section class="card webcam" aria-labelledby="webcam-title">
+              <div class="webcam-video"><video id="video-webcam" playsinline muted poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video><canvas id="webcam-overlay" class="overlay"></canvas></div>
+              <div class="stack tight">
+                <h2 id="webcam-title" class="status"><span id="webcam-status">Show the phone's screen to the webcam</span></h2>
+                <p class="soft-text small" id="webcam-help" aria-live="polite">The phone shows its reply after reading the code alongside.</p>
+              </div>
+            </section>
+            <section class="card sas" id="sas-card" hidden aria-labelledby="sas-title">
+              <h2 id="sas-title">Compare this code with the phone</h2>
+              <p class="soft-text">It is computed on both sides from the exchanged keys. If it differs, someone is in between: cancel.</p>
+              <p class="sas-digits" id="sender-sas" aria-live="polite">— —</p>
+              <div class="row">
+                <button type="button" class="button primary" id="confirm-sas">Match, transfer</button>
+                <button type="button" class="button secondary" id="decline-sas">Different, cancel</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- Received file -->
+      <section class="screen container narrow" id="received-screen" hidden aria-labelledby="received-title">
+        <div class="success">
+          <div class="success-icon" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h1 id="received-title">Received and verified</h1>
+          <p class="soft-text">The file's fingerprint matches the one announced by the sender.</p>
+        </div>
+        <figure class="received-preview">
+          <div class="preview-frame" id="received-preview-frame"></div>
+          <figcaption class="row">
+            <button type="button" class="button secondary small-button" id="enlarge">
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Enlarge preview
+            </button>
+            <button type="button" class="button secondary small-button" id="copy" hidden>Copy text</button>
+          </figcaption>
+        </figure>
+        <div class="card file">
+          <div class="file-line">
+            <span class="icon blue" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+            <span class="stack tight"><strong id="received-name">—</strong><span class="soft-text small" id="received-detail"></span></span>
+          </div>
+          <dl class="digits">
+            <div><dt>Frames</dt><dd id="received-frames">—</dd></div>
+            <div><dt>Duration</dt><dd id="received-duration">—</dd></div>
+            <div><dt>Throughput</dt><dd id="received-throughput">—</dd></div>
+            <div><dt>Mode</dt><dd id="received-mode">—</dd></div>
+          </dl>
+        </div>
+        <p class="soft-text small">Nothing has been opened or imported. The file awaits your decision.</p>
+        <div class="stack actions">
+          <button type="button" class="button primary large" id="save">Save</button>
+          <p class="save-status" id="received-status" role="status" hidden></p>
+          <div class="row">
+            <button type="button" class="button secondary" id="share" hidden>Share</button>
+            <button type="button" class="button secondary danger" id="delete">Delete</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer" id="footer">
+      <div class="container footer-content">
+        <span>No telemetry</span>
+        <span>Nothing is imported without your consent</span>
+        <span class="mono">ORP v0.1 · TM4/TM8</span>
+      </div>
+      <section class="container log" id="log" hidden aria-label="Log" aria-live="polite"></section>
+    </footer>
+
+    <!-- Android: bottom navigation bar (main destinations) -->
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation" hidden>
+      <button type="button" class="nav-item" data-tab="receive"><span class="nav-icon"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg></span><span>Receive</span></button>
+      <button type="button" class="nav-item" data-tab="send"><span class="nav-icon"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span>Send</span></button>
+      <a class="nav-item" href="../lab/index.html"><span class="nav-icon"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 15h9" stroke="currentColor" stroke-width="2"/></svg></span><span>Test bench</span></a>
+    </nav>
+
+    <!-- ── Dark full-frame views ─────────────────────────────────────────── -->
+    <section class="fullscreen" id="send-screen" hidden aria-labelledby="send-title">
+      <div class="hud top">
+        <span class="send-state" id="send-title"><span class="dot amber" aria-hidden="true"></span>Sending</span>
+        <span class="soft" id="send-file"></span>
+        <span class="sas-hud right" title="Must match the phone"><span class="soft">Verification code</span> <b class="mono" id="send-sas">— —</b></span>
+        <span class="mono soft" id="send-mode">TM8</span>
+      </div>
+      <div class="scene">
+        <canvas id="send-canvas" class="grid full" aria-label="Optical frames being sent"></canvas>
+        <p class="count" id="send-count" aria-live="assertive" hidden><span id="send-count-digit">5</span><small>Pick up the phone and aim at the screen</small></p>
+      </div>
+      <div class="hud bottom">
+        <p class="module-alert" id="send-alert" role="status" hidden></p>
+        <div class="progress" id="send-progress">
+          <div class="progress-text"><span id="send-gauge-text">The phone tells you when it's done: there is no return channel.</span><span class="mono" id="send-frames">0 frames</span></div>
+          <div class="thin-bar" aria-hidden="true"><div class="scroll" id="send-gauge"></div></div>
+        </div>
+        <div class="row">
+          <button type="button" class="button ghost" id="switch-tm4">Switch to TM4</button>
+          <button type="button" class="button light" id="stop-send">Stop</button>
+        </div>
+        <p class="soft small">Brightness at maximum, window in the foreground, no sleep.</p>
+      </div>
+    </section>
+
+    <section class="fullscreen capture" id="capture-screen" hidden aria-labelledby="capture-screen-title">
+      <div class="capture-top">
+        <button type="button" class="round" id="close-capture" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+        <h1 id="capture-screen-title">Receiving</h1>
+        <span class="chip" id="lock-chip" hidden>
+          <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>
+          <span id="lock-chip-text">White balance + exposure locked</span>
+        </span>
+        <div class="modes-capture" role="radiogroup" aria-label="Receiving mode" id="modes-capture">
+          <button type="button" role="radio" aria-checked="true" data-mode="live">Live</button>
+          <button type="button" role="radio" aria-checked="false" data-mode="slowmo">Slow-mo</button>
+        </div>
+      </div>
+      <div class="viewfinder">
+        <video id="video-capture" playsinline muted poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
+        <canvas id="capture-overlay" class="overlay"></canvas>
+        <!-- SLOW-MOTION mode: the page camera is closed; we film, then read the video. -->
+        <div class="slowmo" id="slowmo-panel" hidden>
+          <div class="slowmo-ready" id="slowmo-ready">
+            <h2>Slow-mo receiving</h2>
+            <ol>
+              <li>On the sender: subframe <b>17</b> or <b>33 ms</b>, then “Send”.</li>
+              <li><b>Film</b> from the countdown, aiming at the sending screen, phone held upright (portrait).</li>
+              <li>Stop when the sender shows <b>“Enough sent”</b>. Frames missing? The app tells you how much more to film.</li>
+            </ol>
+            <button type="button" class="button primary large" id="film-video">Film</button>
+            <label class="subtle-link" for="video-import">or import a video</label>
+            <input type="file" id="video-import" accept="video/*" hidden />
+          </div>
+          <div class="slowmo-reading" id="slowmo-reading" hidden>
+            <h2 id="slowmo-title">Reading video</h2>
+            <div class="thick-bar" role="progressbar" aria-label="Reading video" aria-valuemin="0" aria-valuemax="100" id="slowmo-bar"><div id="slowmo-fill"></div></div>
+            <p class="mono small" id="slowmo-detail" aria-live="polite">—</p>
+            <button type="button" class="button ghost" id="slowmo-cancel">Cancel reading</button>
+          </div>
+          <p class="slowmo-state" id="video-state" role="status"></p>
+        </div>
+      </div>
+      <div class="zone-advice"><p class="advice" id="advice" role="status">Aim at the screen: keep the three large corner squares in the frame.</p></div>
+      <div class="sheet">
+        <p class="sheet-sas" id="capture-sas-line" hidden>Verification code <b class="mono" id="capture-sas">— —</b> <span>matches the sending screen</span></p>
+        <div class="sheet-title">
+          <span id="capture-sheet-title">Reading the sender's code</span>
+          <span class="mono big" id="capture-percent" hidden>0%</span>
+        </div>
+        <div class="thick-bar" id="capture-bar" hidden role="progressbar" aria-label="Receiving progress"><div id="capture-fill"></div></div>
+        <p class="soft-text small mono" id="capture-detail" hidden aria-live="polite"></p>
+        <p class="sheet-error" id="capture-denied" role="alert" hidden></p>
+        <dl class="digits">
+          <div><dt>Valid frames</dt><dd id="capture-frames">0</dd></div>
+          <div><dt>Throughput</dt><dd id="capture-throughput">—</dd></div>
+          <div><dt>Mode</dt><dd id="capture-mode">—</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="fullscreen response" id="phrase-screen" hidden aria-labelledby="phrase-title">
+      <div class="response-content">
+        <h1 id="phrase-title">Sender without a camera: compare the code</h1>
+        <div class="response-sas" id="phrase-sas">
+          <p class="soft">The same code must appear below the sender's grid:</p>
+          <p class="sas-digits light" id="sas-phrase">— —</p>
+          <div class="row center">
+            <button type="button" class="button light" id="confirm-phrase">Match, receive</button>
+            <button type="button" class="button ghost" id="decline-phrase">Different</button>
+          </div>
+        </div>
+        <form class="phrase" id="form-phrase" hidden>
+          <label for="phrase" class="soft">The sender chose its own shared passphrase: enter it</label>
+          <input id="phrase" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" minlength="8" required />
+          <button type="submit" class="button light">Confirm</button>
+          <button type="button" class="button ghost" id="cancel-phrase">Cancel</button>
+        </form>
+        <p class="plain-error" id="phrase-error" role="alert" hidden></p>
+      </div>
+    </section>
+
+    <section class="fullscreen response" id="response-screen" hidden aria-labelledby="response-title">
+      <div class="response-content">
+        <h1 id="response-title">Show this screen to the sender's webcam</h1>
+        <canvas id="response-canvas" class="grid" aria-label="Animated reply code"></canvas>
+        <div class="response-sas">
+          <p class="soft">Then compare with the code shown on the sender:</p>
+          <p class="sas-digits light" id="receiver-sas">— —</p>
+          <div class="row center">
+            <button type="button" class="button light" id="confirm-receive">Match, receive</button>
+            <button type="button" class="button ghost" id="decline-receive">Different, cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+[package]
+name = "orp-optics"
+description = "ORP optical layer (TM4/TM8): rendering, location, homography, subframes, receivers — port of packages/optical"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[features]
+default = ["parallel"]
+# Grids of a mosaic decoded in parallel (rayon). No effect on the result:
+# each cell has its own receiver, the image is only read.
+parallel = ["dep:rayon"]
+
+[dependencies]
+orp-core = { path = "../orp-core" }
+rayon = { version = "1.10", optional = true }
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }

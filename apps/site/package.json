@@ -1,0 +1,22 @@
+{
+  "name": "@optirelay/site",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OptiRelay showcase: presentation of the protocol, access to the test bench and to the Android APK for live testing.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5190",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "5",
+    "@fontsource/ibm-plex-sans": "5",
+    "@fontsource/space-grotesk": "5",
+    "@optirelay/core": "workspace:*",
+    "@optirelay/optical": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

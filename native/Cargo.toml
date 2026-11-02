@@ -1,0 +1,16 @@
+# OptiRelay native: the Android app (and its desktop variant) in Rust, with a
+# Slint interface. Port of packages/core and packages/optical (TypeScript) —
+# same ORP protocol, byte for byte: the two implementations check each other
+# against reference vectors.
+[workspace]
+resolver = "2"
+members = ["optirelay", "crates/orp-core", "crates/orp-optics", "crates/orp-transfer"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "Apache-2.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

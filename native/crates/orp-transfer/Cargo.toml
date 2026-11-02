@@ -1,0 +1,10 @@
+[package]
+name = "orp-transfer"
+description = "Headless ORP transfer: adaptive video reading, pairing, file reception — port of packages/browser (without the DOM)"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+orp-core = { path = "../orp-core" }
+orp-optics = { path = "../orp-optics" }

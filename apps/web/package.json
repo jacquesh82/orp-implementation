@@ -1,0 +1,22 @@
+{
+  "name": "@optirelay/web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OptiRelay reference PWA — built only on the public packages (F-17, D-009).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@optirelay/browser": "workspace:*",
+    "@optirelay/core": "workspace:*",
+    "@optirelay/elements": "workspace:*",
+    "@optirelay/optical": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "1",
+    "vite": "^5.4.0"
+  }
+}

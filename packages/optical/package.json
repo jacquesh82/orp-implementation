@@ -1,0 +1,20 @@
+{
+  "name": "@optirelay/optical",
+  "version": "0.1.0",
+  "description": "ORP optical codecs: MONO_2, COLOR_4, COLOR_8, grid, CIELAB calibration, encoder and decoder — no DOM.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@optirelay/core": "workspace:*"
+  },
+  "keywords": ["optirelay", "orp", "qr", "color-codec", "cielab"],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lelabnet-creator/mindlog.optiRelay.git"
+  }
+}

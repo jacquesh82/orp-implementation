@@ -1,0 +1,364 @@
+// Material 3 components of the app: app bar, bottom navigation bar,
+// buttons, segmented button, icon, setting row, progress bar.
+
+import { Theme, Icons } from "theme.slint";
+
+export component Icon inherits Rectangle {
+    in property <string> icon-path;
+    in property <brush> tint: Theme.ink;
+    in property <length> size: 24px;
+    in property <length> thickness: 2px;
+    width: size;
+    height: size;
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: root.icon-path;
+        stroke: root.tint;
+        stroke-width: root.thickness;
+        fill: transparent;
+    }
+}
+
+// Round 48 dp icon button (menu, back, close).
+export component IconButton inherits Rectangle {
+    in property <string> icon-path;
+    in property <brush> tint: Theme.ink;
+    in property <string> label;
+    callback click();
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+    background: zone.pressed ? #10141822 : transparent;
+    accessible-role: button;
+    accessible-label: label;
+    accessible-action-default => { root.click(); }
+    Icon {
+        icon-path: root.icon-path;
+        tint: root.tint;
+    }
+    zone := TouchArea {
+        clicked => { root.click(); }
+    }
+}
+
+// App bar (small, Material 3): navigation action, title, extras.
+export component AppBar inherits Rectangle {
+    in property <string> title;
+    in property <string> icon-path: Icons.menu;
+    in property <string> label: "Open menu";
+    in property <bool> dark: false;
+    callback navigation();
+    height: 64px;
+    background: transparent;
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 12px;
+        spacing: 4px;
+        alignment: start;
+        IconButton {
+            y: 8px;
+            icon-path: root.icon-path;
+            label: root.label;
+            tint: root.dark ? Theme.light : Theme.ink;
+            click => { root.navigation(); }
+        }
+        Text {
+            text: root.title;
+            font-size: root.dark ? 20px : 22px;
+            font-weight: 500;
+            color: root.dark ? Theme.light : Theme.ink;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        @children
+    }
+}
+
+// Badge "Offline" / "Calibrated" / "White + exposure locked".
+export component Badge inherits Rectangle {
+    in property <string> text;
+    in property <string> icon-path: Icons.checked;
+    in property <color> badge-background: Theme.ok-pale;
+    in property <color> badge-ink: Theme.ok-ink;
+    height: 32px;
+    border-radius: 8px;
+    background: badge-background;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 12px;
+        spacing: 6px;
+        alignment: center;
+        Icon {
+            y: (32px - 16px) / 2;
+            icon-path: root.icon-path;
+            size: 16px;
+            tint: root.badge-ink;
+            thickness: 2.5px;
+        }
+        Text {
+            text: root.text;
+            font-size: 13px;
+            font-weight: 500;
+            color: root.badge-ink;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Filled button (56 dp, round), tonal button, outlined button, text button.
+export component Button inherits Rectangle {
+    in property <string> text;
+    in property <string> icon-path;
+    in property <string> kind: "filled"; // filled | tonal | outlined | text | danger
+    in property <bool> active: true;
+    in property <length> control-height: 56px;
+    in property <bool> dark: false;
+    callback click();
+    height: control-height;
+    border-radius: control-height / 2;
+    background: !active ? (dark ? Theme.night-stroke : Theme.surface-variant)
+        : kind == "filled" ? (zone.pressed ? Theme.on-primary-container : Theme.primary)
+        : kind == "tonal" ? Theme.primary-container
+        : zone.pressed ? #10141814 : transparent;
+    border-width: kind == "outlined" || kind == "danger" ? 1px : 0px;
+    border-color: kind == "danger" ? Theme.divider : Theme.outline;
+    accessible-role: button;
+    accessible-label: text;
+    accessible-enabled: active;
+    accessible-action-default => { if active { root.click(); } }
+    property <color> button-ink: !active ? Theme.outline
+        : kind == "filled" ? white
+        : kind == "tonal" ? Theme.on-primary-container
+        : kind == "danger" ? Theme.danger
+        : dark ? Theme.night-link : Theme.primary;
+    HorizontalLayout {
+        alignment: center;
+        spacing: 10px;
+        padding-left: 16px;
+        padding-right: 16px;
+        if root.icon-path != "": Icon {
+            y: (root.control-height - 20px) / 2;
+            icon-path: root.icon-path;
+            size: 20px;
+            tint: root.button-ink;
+            thickness: 2.2px;
+        }
+        Text {
+            text: root.text;
+            font-size: root.control-height >= 56px ? 16px : 15px;
+            font-weight: 600;
+            color: root.button-ink;
+            vertical-alignment: center;
+        }
+    }
+    zone := TouchArea {
+        enabled: root.active;
+        clicked => { root.click(); }
+    }
+}
+
+// Segmented button (2 choices), light or dark.
+export component Segmented inherits Rectangle {
+    in property <string> left-label;
+    in property <string> right-label;
+    in-out property <int> choice: 0;
+    in property <bool> dark: false;
+    in property <length> control-height: 48px;
+    callback change(int);
+    height: control-height;
+    border-radius: control-height / 2;
+    border-width: 1px;
+    border-color: dark ? Theme.night-outline : Theme.outline;
+    clip: true;
+    HorizontalLayout {
+        padding: 1px;
+        for label[i] in [root.left-label, root.right-label]: Rectangle {
+            property <bool> selected: root.choice == i;
+            property <length> rayon: root.control-height / 2 - 1px;
+            width: (root.width - 2px) / 2;
+            background: selected ? (root.dark ? Theme.night-blue : Theme.primary-container) : transparent;
+            border-top-left-radius: i == 0 ? rayon : 0;
+            border-bottom-left-radius: i == 0 ? rayon : 0;
+            border-top-right-radius: i == 1 ? rayon : 0;
+            border-bottom-right-radius: i == 1 ? rayon : 0;
+            accessible-role: button;
+            accessible-label: label;
+            accessible-checked: selected;
+            HorizontalLayout {
+                alignment: center;
+                spacing: 6px;
+                padding-left: 12px;
+                padding-right: 12px;
+                if selected && !root.dark: Icon {
+                    y: (root.control-height - 18px) / 2;
+                    icon-path: Icons.checked;
+                    size: 18px;
+                    tint: Theme.on-primary-container;
+                    thickness: 2.5px;
+                }
+                Text {
+                    text: label;
+                    font-size: root.dark ? 13px : 15px;
+                    font-weight: 500;
+                    vertical-alignment: center;
+                    color: selected ? (root.dark ? #dbe6fb : Theme.on-primary-container) : (root.dark ? Theme.soft-light : Theme.ink);
+                }
+            }
+            TouchArea {
+                clicked => {
+                    root.choice = i;
+                    root.change(i);
+                }
+            }
+        }
+    }
+}
+
+// Bottom navigation bar (Material 3): 3 destinations.
+export component BottomNav inherits Rectangle {
+    in-out property <int> current-tab: 0;
+    callback choose(int);
+    height: 80px;
+    background: Theme.surface-container;
+    HorizontalLayout {
+        for item[i] in [
+            { label: "Receive", icon-path: Icons.camera },
+            { label: "Send", icon-path: Icons.screen },
+            { label: "Test bench", icon-path: Icons.bench },
+        ]: Rectangle {
+            property <bool> selected: root.current-tab == i;
+            accessible-role: tab;
+            accessible-label: item.label;
+            accessible-checked: selected;
+            VerticalLayout {
+                alignment: center;
+                spacing: 4px;
+                HorizontalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 64px;
+                        height: 32px;
+                        border-radius: 16px;
+                        background: selected ? Theme.indicator : transparent;
+                        Icon {
+                            icon-path: item.icon-path;
+                            tint: selected ? Theme.on-primary-container : Theme.soft;
+                        }
+                    }
+                }
+                Text {
+                    text: item.label;
+                    horizontal-alignment: center;
+                    font-size: 12px;
+                    font-weight: selected ? 600 : 500;
+                    color: selected ? Theme.ink : Theme.soft;
+                }
+            }
+            TouchArea {
+                clicked => { root.choose(i); }
+            }
+        }
+    }
+}
+
+// Setting row (title, value, chevron).
+export component SettingRow inherits Rectangle {
+    in property <string> title;
+    in property <string> value;
+    callback click();
+    min-height: 64px;
+    background: zone.pressed ? #10141808 : transparent;
+    accessible-role: button;
+    accessible-label: title + ": " + value;
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 16px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text { text: root.title; font-size: 16px; color: Theme.ink; }
+            Text { text: root.value; font-size: 14px; color: Theme.soft; }
+        }
+        Icon {
+            y: (root.height - 20px) / 2;
+            icon-path: Icons.chevron;
+            size: 20px;
+            tint: Theme.soft;
+        }
+    }
+    zone := TouchArea {
+        clicked => { root.click(); }
+    }
+}
+
+export component Separator inherits Rectangle {
+    in property <bool> dark: false;
+    height: 1px;
+    background: dark ? Theme.night-stroke : Theme.surface-variant;
+}
+
+// Progress bar (8 dp).
+export component Progress inherits Rectangle {
+    in property <float> part; // 0..1
+    in property <bool> dark: false;
+    in property <color> tint: dark ? Theme.light-blue : Theme.primary;
+    height: 8px;
+    border-radius: 4px;
+    background: dark ? Theme.night-stroke : Theme.divider;
+    clip: true;
+    accessible-role: progress-indicator;
+    accessible-value: round(part * 100) + "%";
+    Rectangle {
+        x: 0;
+        width: parent.width * clamp(root.part, 0, 1);
+        border-radius: 4px;
+        background: root.tint;
+    }
+}
+
+// Key figure: label above, value in monospace.
+export component Encrypted inherits VerticalLayout {
+    in property <string> tag;
+    in property <string> value;
+    in property <bool> dark: false;
+    spacing: 2px;
+    Text { text: root.tag; font-size: 12px; color: root.dark ? Theme.soft-light : Theme.soft; }
+    Text { text: root.value; font-size: 17px; font-family: Theme.mono; color: root.dark ? Theme.light : Theme.ink; }
+}
+
+// Completeness of a file, block by block: one vertical bar per block,
+// green once the block is decoded, blue as it fills up.
+export struct BlockView {
+    part: float,
+    complete: bool,
+}
+
+export component BlockBars inherits Rectangle {
+    in property <[BlockView]> blocks;
+    in property <bool> dark: true;
+    in property <length> control-height: 36px;
+    height: control-height;
+    HorizontalLayout {
+        spacing: root.blocks.length > 24 ? 1px : 4px;
+        for b[i] in root.blocks: Rectangle {
+            horizontal-stretch: 1;
+            border-radius: 3px;
+            background: root.dark ? Theme.night-stroke : Theme.surface-variant;
+            clip: true;
+            accessible-role: progress-indicator;
+            accessible-label: "Block " + (i + 1);
+            accessible-value: b.complete ? "complete" : round(b.part * 100) + "%";
+            Rectangle {
+                y: parent.height * (1 - b.part);
+                width: parent.width;
+                height: parent.height * b.part;
+                background: b.complete ? Theme.green : Theme.light-blue;
+            }
+        }
+    }
+}

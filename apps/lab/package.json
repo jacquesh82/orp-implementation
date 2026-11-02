@@ -1,0 +1,20 @@
+{
+  "name": "@optirelay/lab",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OptiRelay test bench (REC-04): screen test pattern, frozen frame, camera capture and calibration report.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5180",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@optirelay/browser": "workspace:*",
+    "@optirelay/core": "workspace:*",
+    "@optirelay/optical": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "1",
+    "vite": "^5.4.0"
+  }
+}
