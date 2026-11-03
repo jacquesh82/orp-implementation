@@ -263,65 +263,271 @@ function centerVertically(
   return { cy: best.cy, score };
 }
 
-/** Picks the L-shaped triplet (TL, TR, BL) and orders it: [TL, TR, BL]. */
-export function chooseTriplet(candidates: FinderCandidate[]): [[number, number], [number, number], [number, number]] | null {
-  let best: { d: [[number, number], [number, number], [number, number]]; error: number } | null = null;
-  for (let i = 0; i < candidates.length; i++) {
-    for (let j = i + 1; j < candidates.length; j++) {
-      for (let k = j + 1; k < candidates.length; k++) {
-        const pts = [candidates[i]!, candidates[j]!, candidates[k]!];
-        // A module smaller than 5 px cannot be decoded — the "triplet" is scene
-        // noise (e.g. 3.7 % confidence on a bowl).
-        const side1 = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
-        const side2 = Math.hypot(pts[0]!.x - pts[2]!.x, pts[0]!.y - pts[2]!.y);
-        if (Math.min(side1, side2) / 34 < 5) continue;
-        const d = (p: FinderCandidate, q: FinderCandidate) => Math.hypot(p.x - q.x, p.y - q.y);
-        const sides = [
-          { length: d(pts[1]!, pts[2]!), opposite: 0 },
-          { length: d(pts[0]!, pts[2]!), opposite: 1 },
-          { length: d(pts[0]!, pts[1]!), opposite: 2 },
-        ].sort((a, b2) => b2.length - a.length);
-        const hypotenuse = sides[0]!.length;
-        const c1 = sides[1]!.length;
-        const c2 = sides[2]!.length;
-        const pythagoreanError = Math.abs(hypotenuse * hypotenuse - (c1 * c1 + c2 * c2)) / (hypotenuse * hypotenuse);
-        const isoscelesError = Math.abs(c1 - c2) / Math.max(c1, c2);
-        const error = pythagoreanError + isoscelesError;
-        if (pythagoreanError > 0.15 || isoscelesError > 0.2) continue;
-        // Scale consistency: the module size given by the triangle (side / 34)
-        // must be the one measured by the finders themselves. Their `score`
-        // is the length of the 1:1:3:1:1 pattern along a HORIZONTAL row,
-        // i.e. 7 modules / max(|cos θ|, |sin θ|) for a grid rotated by θ: we
-        // bring it back to the angle of the triangle. Without this test, the
-        // top-left finders of three NEIGHBORING grids (mosaic) form an
-        // isosceles right triangle that is just as perfect, 45 modules on a
-        // side instead of 34.
-        {
-          const vertexE = pts[sides[0]!.opposite]!;
-          const otherE = pts.find((_, idx) => idx !== sides[0]!.opposite)!;
-          const theta = Math.atan2(otherE.y - vertexE.y, otherE.x - vertexE.x);
-          const tilt = Math.max(Math.abs(Math.cos(theta)), Math.abs(Math.sin(theta)));
-          const finderModule = ((pts[0]!.score + pts[1]!.score + pts[2]!.score) / 21) * tilt;
-          const triangleModule = (c1 + c2) / 2 / 34;
-          if (Math.abs(triangleModule / finderModule - 1) > 0.18) continue;
-        }
-        if (!best || error < best.error) {
-          // TL = vertex opposite the hypotenuse; TR/BL in angle order.
-          const vertex = pts[sides[0]!.opposite]!;
-          const others = pts.filter((_, idx) => idx !== sides[0]!.opposite);
-          // TR / BL by the SIGN of the cross product (image frame, y pointing
-          // down: TL→TR then TL→BL turns clockwise). The former "largest x"
-          // criterion swapped TR and BL as soon as the phone rotated by more
-          // than 45° — grid read mirrored, everything wrong.
-          const [p, q] = [others[0]!, others[1]!];
-          const cross = (p.x - vertex.x) * (q.y - vertex.y) - (p.y - vertex.y) * (q.x - vertex.x);
-          const [tr, bl] = cross > 0 ? [p, q] : [q, p];
-          best = { d: [[vertex.x, vertex.y], [tr.x, tr.y], [bl.x, bl.y]] as [[number, number], [number, number], [number, number]], error };
+/** Three ordered finder centers: [TL, TR, BL]. */
+export type Triplet = [[number, number], [number, number], [number, number]];
+
+/**
+ * Acceptance test of ONE triple, taken in index order (p0 < p1 < p2): the
+ * error (pythagorean + isosceles) and the ordered [TL, TR, BL] triplet, or
+ * null when the triple is not a plausible grid.
+ */
+function evaluateTriple(p0: FinderCandidate, p1: FinderCandidate, p2: FinderCandidate): { triplet: Triplet; error: number } | null {
+  const pts = [p0, p1, p2];
+  // A module smaller than 5 px cannot be decoded — the "triplet" is scene
+  // noise (e.g. 3.7 % confidence on a bowl).
+  const side1 = Math.hypot(p0.x - p1.x, p0.y - p1.y);
+  const side2 = Math.hypot(p0.x - p2.x, p0.y - p2.y);
+  if (Math.min(side1, side2) / 34 < 5) return null;
+  const d = (p: FinderCandidate, q: FinderCandidate) => Math.hypot(p.x - q.x, p.y - q.y);
+  const sides = [
+    { length: d(p1, p2), opposite: 0 },
+    { length: d(p0, p2), opposite: 1 },
+    { length: d(p0, p1), opposite: 2 },
+  ].sort((a, b2) => b2.length - a.length);
+  const hypotenuse = sides[0]!.length;
+  const c1 = sides[1]!.length;
+  const c2 = sides[2]!.length;
+  const pythagoreanError = Math.abs(hypotenuse * hypotenuse - (c1 * c1 + c2 * c2)) / (hypotenuse * hypotenuse);
+  const isoscelesError = Math.abs(c1 - c2) / Math.max(c1, c2);
+  const error = pythagoreanError + isoscelesError;
+  if (pythagoreanError > 0.15 || isoscelesError > 0.2) return null;
+  // Scale consistency: the module size given by the triangle (side / 34)
+  // must be the one measured by the finders themselves. Their `score`
+  // is the length of the 1:1:3:1:1 pattern along a HORIZONTAL row,
+  // i.e. 7 modules / max(|cos θ|, |sin θ|) for a grid rotated by θ: we
+  // bring it back to the angle of the triangle. Without this test, the
+  // top-left finders of three NEIGHBORING grids (mosaic) form an
+  // isosceles right triangle that is just as perfect, 45 modules on a
+  // side instead of 34.
+  const vertex = pts[sides[0]!.opposite]!;
+  const others = pts.filter((_, idx) => idx !== sides[0]!.opposite);
+  const [p, q] = [others[0]!, others[1]!];
+  const theta = Math.atan2(p.y - vertex.y, p.x - vertex.x);
+  const tilt = Math.max(Math.abs(Math.cos(theta)), Math.abs(Math.sin(theta)));
+  const finderModule = ((p0.score + p1.score + p2.score) / 21) * tilt;
+  const triangleModule = (c1 + c2) / 2 / 34;
+  if (Math.abs(triangleModule / finderModule - 1) > 0.18) return null;
+  // TL = vertex opposite the hypotenuse; TR / BL by the SIGN of the cross
+  // product (image frame, y pointing down: TL→TR then TL→BL turns
+  // clockwise). The former "largest x" criterion swapped TR and BL as soon
+  // as the phone rotated by more than 45° — grid read mirrored.
+  const cross = (p.x - vertex.x) * (q.y - vertex.y) - (p.y - vertex.y) * (q.x - vertex.x);
+  const [tr, bl] = cross > 0 ? [p, q] : [q, p];
+  return { triplet: [[vertex.x, vertex.y], [tr.x, tr.y], [bl.x, bl.y]], error };
+}
+
+// Bounds of the plausible-triple enumeration, DERIVED from the acceptance
+// test above (with ≥ 5 % margin, so that no accepted triple is ever missed):
+// - the leg from the vertex to the LOWER-index of the two other finders is
+//   ≥ 170 px (min-side test, 5 px × 34: the lowest index of the triple is
+//   either the vertex — both legs ≥ 170 — or that finder);
+// - with m the mean leg, m ∈ [0.9, 1.125] × leg, and the scale test gives
+//   m ∈ [0.82, 1.18] × 34 · tilt · S / 21 (S: sum of the 3 scores, tilt ∈
+//   [√2/2, 1]): a leg lies in [0.834 S, 2.123 S];
+// - the pythagorean test bounds |cos| of the right angle by 0.181 and the
+//   isosceles test the ratio of the legs to [0.8, 1.25]: the third finder
+//   lies within 0.337 × leg of the second one turned by ±90° around the
+//   vertex.
+// These bounds only prune: every triple that passes them still goes through
+// the exact test, which alone decides.
+const MIN_LEG = 169;
+const LEG_PER_SCORE_MIN = 0.79;
+const LEG_PER_SCORE_MAX = 2.23;
+const THIRD_RADIUS = 0.36;
+const LEG_RATIO_MIN = 0.78;
+const LEG_RATIO_MAX = 1.28;
+const MAX_COS = 0.2;
+/** Mean leg / S: [0.82 · 34 · √2/2 / 21, 1.18 · 34 / 21] = [0.939, 1.910], ± 3 %. */
+const MEAN_LEG_PER_SCORE_MIN = 0.91;
+const MEAN_LEG_PER_SCORE_MAX = 1.97;
+
+/**
+ * Calls `visit(i, j, k)` (i < j < k) for a SUPERSET of the triples that
+ * `evaluateTriple` accepts — instead of the n³/6 triples. For each candidate
+ * taken as the right-angle vertex and each second finder at a compatible
+ * distance (scores), the third one is only looked for in a disc around its
+ * predicted position (uniform grid of cells). O(n² + accepted neighbors).
+ * A triple may be visited more than once.
+ */
+function forEachPlausibleTriple(c: readonly FinderCandidate[], visit: (i: number, j: number, k: number) => void): void {
+  const n = c.length;
+  if (n < 3) return;
+  const xs = new Float64Array(n);
+  const ys = new Float64Array(n);
+  const ss = new Float64Array(n);
+  let minScore = Infinity;
+  let maxScore = -Infinity;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const k = c[i]!;
+    xs[i] = k.x;
+    ys[i] = k.y;
+    ss[i] = k.score;
+    minScore = Math.min(minScore, k.score);
+    maxScore = Math.max(maxScore, k.score);
+    minX = Math.min(minX, k.x);
+    minY = Math.min(minY, k.y);
+    maxX = Math.max(maxX, k.x);
+    maxY = Math.max(maxY, k.y);
+  }
+  // Uniform grid of cells ≈ the search radius of a typical grid (leg ≈ 4.6
+  // scores); inside a cell, candidates by decreasing score (then index), so
+  // that a search stops at the first score too small.
+  const median = Float64Array.from(ss).sort()[n >> 1]!;
+  const cell = Math.max(8, THIRD_RADIUS * 4.6 * median);
+  const columns = Math.floor((maxX - minX) / cell) + 1;
+  const rows = Math.floor((maxY - minY) / cell) + 1;
+  const cellCount = columns * rows;
+  const cellOf = new Int32Array(n);
+  const start = new Int32Array(cellCount + 1);
+  for (let i = 0; i < n; i++) {
+    cellOf[i] = Math.floor((ys[i]! - minY) / cell) * columns + Math.floor((xs[i]! - minX) / cell);
+    start[cellOf[i]! + 1]!++;
+  }
+  for (let i = 0; i < cellCount; i++) start[i + 1]! += start[i]!;
+  const order = Array.from({ length: n }, (_, i) => i).sort((p, q) => ss[q]! - ss[p]! || p - q);
+  const fill = start.slice(0, cellCount);
+  const items = new Int32Array(n);
+  for (const i of order) items[fill[cellOf[i]!]!++] = i;
+  const cellMax = new Float64Array(cellCount).fill(-Infinity);
+  for (let i = 0; i < cellCount; i++) if (start[i + 1]! > start[i]!) cellMax[i] = ss[items[start[i]!]!]!;
+
+  // Score window of the third finder, implied by the leg-ratio and scale
+  // tests below (1 % margin): sum of the scores ∈ mean leg / [1.97, 0.91].
+  const thirdMin = ((1 + LEG_RATIO_MIN) / 2 / MEAN_LEG_PER_SCORE_MAX) * 0.99;
+  const thirdMax = ((1 + LEG_RATIO_MAX) / 2 / MEAN_LEG_PER_SCORE_MIN) * 1.01;
+  for (let v = 0; v < n; v++) {
+    const vx = xs[v]!;
+    const vy = ys[v]!;
+    for (let p = 0; p < n; p++) {
+      if (p === v) continue;
+      const dx = xs[p]! - vx;
+      const dy = ys[p]! - vy;
+      const leg2 = dx * dx + dy * dy;
+      if (leg2 < MIN_LEG * MIN_LEG) continue;
+      const pair = ss[v]! + ss[p]!;
+      const low = (pair + minScore) * LEG_PER_SCORE_MIN;
+      const high = (pair + maxScore) * LEG_PER_SCORE_MAX;
+      if (leg2 < low * low || leg2 > high * high) continue;
+      const leg = Math.sqrt(leg2);
+      const scoreMin = thirdMin * leg - pair;
+      const scoreMax = thirdMax * leg - pair;
+      const r = THIRD_RADIUS * leg;
+      for (let sign = 1; sign >= -1; sign -= 2) {
+        // Second finder turned by ±90° around the vertex.
+        const qx = vx - sign * dy;
+        const qy = vy + sign * dx;
+        const cx0 = Math.max(0, Math.floor((qx - r - minX) / cell));
+        const cx1 = Math.min(columns - 1, Math.floor((qx + r - minX) / cell));
+        const cy0 = Math.max(0, Math.floor((qy - r - minY) / cell));
+        const cy1 = Math.min(rows - 1, Math.floor((qy + r - minY) / cell));
+        for (let cy = cy0; cy <= cy1; cy++) {
+          for (let cx = cx0; cx <= cx1; cx++) {
+            const idx = cy * columns + cx;
+            if (cellMax[idx]! < scoreMin) continue;
+            for (let s = start[idx]!; s < start[idx + 1]!; s++) {
+              const q = items[s]!;
+              const sq = ss[q]!;
+              if (sq < scoreMin) break;
+              if (sq > scoreMax || q <= p || q === v) continue;
+              const ex = xs[q]! - qx;
+              const ey = ys[q]! - qy;
+              if (ex * ex + ey * ey > r * r) continue;
+              // Cheap necessary tests before the exact one: ratio of the
+              // legs, right angle, scale of the finders.
+              const fx = xs[q]! - vx;
+              const fy = ys[q]! - vy;
+              const other = Math.sqrt(fx * fx + fy * fy);
+              if (other < LEG_RATIO_MIN * leg || other > LEG_RATIO_MAX * leg) continue;
+              if (Math.abs(dx * fx + dy * fy) > MAX_COS * leg * other) continue;
+              const mean = (leg + other) / 2;
+              const sum = pair + sq;
+              if (mean < MEAN_LEG_PER_SCORE_MIN * sum || mean > MEAN_LEG_PER_SCORE_MAX * sum) continue;
+              // Indices in increasing order: the acceptance test is evaluated
+              // on the triple in candidate order, as an exhaustive scan would.
+              const lo = Math.min(v, p, q);
+              const hi = Math.max(v, p, q);
+              visit(lo, v + p + q - lo - hi, hi);
+            }
+          }
         }
       }
     }
   }
-  return best ? best.d : null;
+}
+
+/** An accepted triple: candidate indices (i < j < k), error and ordered triplet. */
+interface TripleFit {
+  i: number;
+  j: number;
+  k: number;
+  error: number;
+  triplet: Triplet;
+}
+
+/** Total order of the choice: smallest error, then first triple in (i, j, k) order — that of an exhaustive scan. */
+function before(a: TripleFit, b: TripleFit): number {
+  return a.error - b.error || a.i - b.i || a.j - b.j || a.k - b.k;
+}
+
+/** Every accepted triple, sorted in choice order, without duplicates. */
+function acceptedTriples(candidates: readonly FinderCandidate[]): TripleFit[] {
+  const fits: TripleFit[] = [];
+  forEachPlausibleTriple(candidates, (i, j, k) => {
+    const fit = evaluateTriple(candidates[i]!, candidates[j]!, candidates[k]!);
+    if (fit) fits.push({ i, j, k, error: fit.error, triplet: fit.triplet });
+  });
+  fits.sort(before);
+  return fits.filter((f, n) => n === 0 || before(fits[n - 1]!, f) !== 0);
+}
+
+/**
+ * Picks the L-shaped triplet (TL, TR, BL) and orders it: [TL, TR, BL] — the
+ * accepted triple of smallest error (first in candidate order on a tie).
+ */
+export function chooseTriplet(candidates: FinderCandidate[]): Triplet | null {
+  const best: { fit: TripleFit | null } = { fit: null };
+  forEachPlausibleTriple(candidates, (i, j, k) => {
+    const fit = evaluateTriple(candidates[i]!, candidates[j]!, candidates[k]!);
+    if (!fit) return;
+    const f = { i, j, k, error: fit.error, triplet: fit.triplet };
+    if (!best.fit || before(f, best.fit) < 0) best.fit = f;
+  });
+  return best.fit ? best.fit.triplet : null;
+}
+
+/**
+ * Every grid of a mosaic, one triangle after the other: the best triplet,
+ * then the best one among the candidates that remain once every finder
+ * INSIDE the grid found is discarded (not only its three anchors: the colored
+ * data of a P subframe create false patterns, which must not become a ghost
+ * grid). Same result as `chooseTriplet` called again on the remaining
+ * candidates, but the triples are enumerated and tested only ONCE: removing
+ * candidates neither changes the test of a triple nor the order of two
+ * triples.
+ */
+export function chooseTriplets(candidates: FinderCandidate[], maximum: number): Triplet[] {
+  const fits = acceptedTriples(candidates);
+  const alive = new Uint8Array(candidates.length).fill(1);
+  const chosen: Triplet[] = [];
+  let cursor = 0;
+  while (chosen.length < maximum) {
+    while (cursor < fits.length && !(alive[fits[cursor]!.i] && alive[fits[cursor]!.j] && alive[fits[cursor]!.k])) cursor++;
+    if (cursor === fits.length) break;
+    const triplet = fits[cursor]!.triplet;
+    chosen.push(triplet);
+    const { a, b, c, d, e, f } = affineFromTriplet(triplet[0], triplet[1], triplet[2]);
+    const det = a * d - b * c;
+    candidates.forEach((k, idx) => {
+      const mx = (d * (k.x - e) - c * (k.y - f)) / det;
+      const my = (a * (k.y - f) - b * (k.x - e)) / det;
+      if (!(mx < -2 || my < -2 || mx > GRID_SIZE + 2 || my > GRID_SIZE + 2)) alive[idx] = 0;
+    });
+  }
+  return chosen;
 }
 
 // ── Affine transform and sampling ─────────────────────────────────────────

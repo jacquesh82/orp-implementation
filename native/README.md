@@ -1,60 +1,83 @@
 # OptiRelay native (Rust + Slint)
 
-The OptiRelay Android app, rewritten in native Rust with a
-[Slint](https://slint.dev) interface, after the Material 3 mock-up
-(<https://claude.ai/artifact/Kds363gGaS7dz38xqfapv6>). It will replace the
-WebView APK (`apps/android-lab`). The ORP protocol stays the same, byte for
-byte: the web test bench (`apps/lab`) and this app talk to each other.
+THE OptiRelay Android app, in native Rust with a [Slint](https://slint.dev)
+interface (and its desktop variant). Two functions only — **Receive** and
+**Send** — with the security of OptiRelay Studio (`examples/studio`) built
+in; the two talk to each other in both directions. Look aligned with the
+showcase (`apps/site`): near-black ground, showcase blue, square corners,
+dashed hairlines, Aspekta for text and IBM Plex Mono for uppercase labels and
+codes (TTF converted unmodified from the showcase woff2, OFL licenses in
+`optirelay/ui/fonts/`).
+
+## Screens
+
+| Screen | Role |
+|---|---|
+| Home | the two choices: Receive, Send |
+| Receive / camera | live camera (NDK Camera2): grid outlines, framing advice, white balance + exposure lock, progress by blocks |
+| Receive / code | type the sender's code, then compare the 6-digit verification code |
+| Receive / file | received and verified file: preview, save to Downloads, share, delete |
+| Send | file choice, TM4 (default) or TM8 |
+| Send / transmitting | the animated grid, the code and the verification code as text below it |
+
+## Security flow (same as OptiRelay Studio, `live.ts`)
+
+**Send.** A 12-character code is drawn per sending from the system CSPRNG,
+uniformly over `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (rejection sampling,
+`orp_transfer::random_code`). It is the pairing passphrase
+(`PairingMode::Passphrase`, encryption required) and is shown as TEXT,
+grouped `XXXX-XXXX-XXXX`, next to the grid — never inside it — with the SAS
+`123 456`. Loop: the init code (one R/P pair) then a data frame (two R/P
+pairs), single grid, 250 ms per subframe.
+
+**Receive.** The init code is read; a passphrase pairing makes the app ASK
+FOR THE CODE (`typed_passphrase` normalisation: dashes, spaces, lower case),
+stretched by PBKDF2 off the UI thread; the SAS is shown to compare with the
+sender's. "They match" starts the reception; "they differ" asks the code
+again. Three data frames refused as forged (none accepted) mean a wrong code:
+the code is asked again (`Event::WrongCode`), and the frames read meanwhile
+are kept and replayed. A sender in codes pairing (response/reveal, ORP v0.2)
+is still supported: the response grid is shown, the sender's reveal code
+gives the SAS.
 
 ## Running
 
 ```sh
-# Desktop (phone-shaped window)
+# Desktop (phone-shaped window); OPTIRELAY_FILE=<path> picks the file to send
 cargo run -p optirelay
 
-# Screenshots of every screen, off-screen (visual check)
+# Screenshots of every screen, off-screen (software renderer)
 cargo run -p optirelay --example captures -- /path/to/dir
 
-# Replay a real video through the native receiving pipeline (PC);
-# --all-images analyzes every image
-cargo run --release -p orp-transfer --example replay -- video.mp4 [--all-images]
+# Replay a real video through the receiving pipeline (PC)
+cargo run --release -p orp-transfer --example replay -- video.mp4 --code XXXX-XXXX-XXXX
 
-# Synthetic calibration series (calibration check)
-cargo run --release -p orp-transfer --example calibration_series \
-  | ffmpeg -f rawvideo -pix_fmt rgba -s 1920x1080 -r 60 -i - series.mp4
+# Tests (vectors, sessions, Studio ↔ native round trips)
+cargo test --workspace
 
-# Other examples: block_simulation, overhead_fountain, overhead_pattern, diag
-
-# Android (S25: arm64) — rustup + aarch64-linux-android target + cargo-ndk:
-# Rust library → jniLibs → Gradle APK (Kotlin host) → adb
-android/rebuild.sh <adb-serial>
-
-# Tests without filming or picking (files already in the app cache)
-adb shell am start -n fr.lelab.optirelay.natif/.MainActivity \
-    --es video /data/user/0/fr.lelab.optirelay.natif/cache/slowmotion/sample.mp4
-#   --es calibration <series video>   --es send <file to send>
+# Android (arm64) — rustup + aarch64-linux-android target + cargo-ndk:
+# Rust library → jniLibs → Gradle APK (Kotlin host) → showcase download → adb
+android/rebuild.sh [<adb-serial>]
 adb logcat -s OptiRelay
 ```
 
-The APK is a Gradle project (`android/`): a `NativeActivity` (Kotlin,
-`MainActivity`) loads `liboptirelay.so` and only does what the Java API alone
-offers — slow-motion filming in a high-speed session (`SlowMotionActivity`,
-taken from the bench), camera permission, system bar colors. The bridge is
-JNI (`optirelay/src/android.rs`).
+## Android host
 
-Android package `fr.lelab.optirelay.natif`: it installs next to the WebView
-app without replacing it.
+The APK is a Gradle project (`android/`): a `NativeActivity` (`MainActivity`)
+loads `liboptirelay.so`. Everything is Rust (UI, protocol, camera through the
+NDK); the Kotlin shim only keeps what needs an activity callback or the UI
+thread: the camera permission (its answer), the file picker (its result),
+saving to Downloads (MediaStore) and sharing (FileProvider + share sheet),
+full brightness while sending (window attributes). The bridge is JNI
+(`optirelay/src/android.rs`). Package `fr.lelab.optirelay.natif`.
 
-## Port, step by step
+## Crates
 
-| Step | Content | Status |
-|---|---|---|
-| P0 | Slint interface: 8 screens, bottom bar, menu, back key, safe areas | done |
-| P1 | `orp-core`: frames (meta, Reed-Solomon, CRC), LT fountain, pairing, encryption (ECDH P-256, HKDF, AES-GCM, HMAC), compression, session — checked against vectors produced by `packages/core` (`vectors/generate-core.ts`) | done: 37 tests, byte-identical, full sessions included |
-| P2 | `orp-optics`: render, location, homography, TM4/TM8 subframes, receiver with averaging, mosaic, `TmPipeline` — vectors from `packages/optical` (`vectors/generate-optics.ts`) | done: 44 tests, bit-identical; replay of the real 1-grid video = TS (156 frames, file at 16.33 s) |
-| P3 | Android: Gradle host + JNI, 240 fps slow motion, video decoding (MediaCodec, 620 fps), live camera (Camera2 NDK) with grid outlines, smoothed advice and white balance + exposure lock, permission, system bars, saving and sharing | done; live camera not yet checked against a sender; filmed image of the code in slow motion to do |
-| P4 | `orp-transfer` (reception, passphrase pairing AND strong mode on the receiving side, adaptive reading, stop if the code is not read, sending); full-screen sending; preview; log | done; strong mode on the native sending side (reading the response with the camera) to do |
-| P5 | Calibration: reading the bench series, per-trial measurement, recommendation, short code, send settings | done; checked on a synthetic series, not yet filmed on a real screen |
+| Crate | Content |
+|---|---|
+| `orp-core` | frames (meta, Reed-Solomon, CRC), LT fountain, pairing, encryption (ECDH P-256, HKDF, AES-GCM, HMAC, PBKDF2), compression, session — byte-identical to `packages/core` (vectors `vectors/generate-core.ts`) |
+| `orp-optics` | render, location, homography, TM4/TM8 subframes, receiver with averaging, mosaic, `TmPipeline` — bit-identical to `packages/optical` |
+| `orp-transfer` | sender (Studio loop), receiver state machine (code to type, SAS, wrong code, new sending), random code, adaptive video reading (replay) |
 
 Porting rule: each Rust module has its tests on the SAME vectors as its
 TypeScript module (JSON files generated from `packages/*`); a one-byte

@@ -2,7 +2,7 @@
 //! `cargo run --example captures -- <dir>`.
 //! Slint software renderer: no window, no desktop dependency.
 
-use optirelay::{App, Screen};
+use optirelay::{App, CodeStep, Screen};
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::Rgb8Pixel;
 use slint::platform::{Platform, WindowAdapter, WindowEvent};
@@ -38,77 +38,70 @@ fn main() {
 
     let app = App::new().unwrap();
     app.show().unwrap();
+    let digits = |a: &App, sas: &str| {
+        let d: Vec<slint::SharedString> = sas.chars().map(|c| c.to_string().into()).collect();
+        a.set_code_digits(slint::ModelRc::new(slint::VecModel::from(d)));
+        a.set_code_readable(orp_transfer::shown_sas(sas).into());
+    };
+    let grid = |columns: usize| {
+        let (r, _) = orp_transfer::batch_images(&[orp_transfer::pairing_frame(&[7u8; 65]).unwrap()], columns, 17).unwrap();
+        slint::Image::from_rgba8(slint::SharedPixelBuffer::clone_from_slice(&r.data, r.width as u32, r.height as u32))
+    };
     let states: Vec<(&str, Box<dyn Fn(&App)>)> = vec![
-        ("1-receive", Box::new(|a: &App| a.set_current_tab(0))),
-        ("1b-receive-continue", Box::new(|a: &App| {
-            a.set_receive_mode(1);
-            a.set_receive_info("Transfer in progress: ≈ 93% received (4/5 blocks complete) (code 976 188). “Film” completes it — the sender must still show this code.".into());
-            let blocks: Vec<optirelay::BlockView> = [(1.0, true), (1.0, true), (0.62, false), (1.0, true), (1.0, true)]
-                .into_iter()
-                .map(|(part, complete)| optirelay::BlockView { part, complete })
-                .collect();
-            a.set_block_view(slint::ModelRc::new(slint::VecModel::from(blocks)));
-        })),
-        ("1c-slow-motion-continue", Box::new(|a: &App| {
-            a.set_slow_motion_next(24);
-            let blocks: Vec<optirelay::BlockView> = [(1.0, true), (1.0, true), (0.62, false), (1.0, true), (1.0, true)]
-                .into_iter()
-                .map(|(part, complete)| optirelay::BlockView { part, complete })
-                .collect();
-            a.set_block_view(slint::ModelRc::new(slint::VecModel::from(blocks)));
-            a.set_file_title("4/5 blocks · ≈ 93%".into());
-            a.set_receive_info("Transfer in progress: ≈ 93% received (4/5 blocks complete) (code 976 188).".into());
-            a.set_slow_motion_step(2);
-            a.set_slow_motion_share(1.0);
-            a.set_slow_motion_title("Video read".into());
-            a.set_slow_motion_message("Received ≈ 33% of the file, kept. Next: LEAVE the transmission running on the sender (it must still show code 976 188) — stopping or restarting it changes the code and starts over. Then “Film the rest”: ≈ 24 s.".into());
-            a.set_screen(Screen::SlowMotion);
-        })),
-        ("1d-back", Box::new(|a: &App| {
-            a.set_receive_info("".into());
-            a.set_slow_motion_next(0);
-            a.set_block_view(slint::ModelRc::default());
-            a.set_receive_mode(0);
-            a.set_screen(Screen::Home);
-        })),
-        ("2-send", Box::new(|a: &App| a.set_current_tab(1))),
-        ("3-menu", Box::new(|a: &App| {
-            a.set_current_tab(0);
-            a.set_menu_open(true);
-        })),
-        ("4-capture", Box::new(|a: &App| {
-            a.set_menu_open(false);
+        ("1-home", Box::new(|_: &App| {})),
+        ("2-capture", Box::new(|a: &App| {
             a.set_capture_lock(true);
             a.set_capture_good(true);
             a.set_capture_advice("Framing OK. Hold still.".into());
+            a.set_capture_title("Receiving".into());
+            a.set_capture_part(0.42);
+            a.set_capture_detail("412 / 980 SYMBOLS".into());
+            a.set_capture_frames("206".into());
+            a.set_capture_throughput("128 B/s".into());
+            a.set_capture_mode("TM4".into());
+            a.set_capture_errors("3.1%".into());
+            a.set_code_readable("976 188".into());
             // A grid seen slightly at an angle, in the middle of the sensor.
             a.set_capture_outline("M250 620 L850 650 L830 1260 L230 1220 Z ".into());
             a.set_screen(Screen::Capture);
         })),
-        ("4b-strong-code", Box::new(|a: &App| {
-            let (r, _) = orp_transfer::batch_images(&[orp_transfer::pairing_frame(&[7u8; 65]).unwrap()], 1, 8).unwrap();
-            a.set_response_code(slint::Image::from_rgba8(slint::SharedPixelBuffer::clone_from_slice(&r.data, r.width as u32, r.height as u32)));
-            a.set_code_has_response(true);
+        ("3-code-type", Box::new(|a: &App| {
+            a.set_code_readable("".into());
+            a.set_code_step(CodeStep::TypeCode);
+            a.set_code_note("11 B announced. Frames already read are kept.".into());
             a.set_screen(Screen::Code);
         })),
-        ("5-code", Box::new(|a: &App| a.set_screen(Screen::Code))),
-        ("6-slow-motion", Box::new(|a: &App| {
-            a.set_receive_mode(1);
-            a.set_screen(Screen::SlowMotion);
+        ("3b-code-wrong", Box::new(|a: &App| {
+            a.set_code_error("The frames do not open with this code: it is not the sender's. Type it again.".into());
         })),
-        ("7-received", Box::new(|a: &App| a.set_screen(Screen::Received))),
-        ("8-bench", Box::new(|a: &App| {
-            a.set_screen(Screen::Home);
-            a.set_current_tab(2);
+        ("4-code-compare", Box::new(move |a: &App| {
+            a.set_code_error("".into());
+            digits(a, "976188");
+            a.set_code_step(CodeStep::Compare);
         })),
-        ("9-test", Box::new(|a: &App| a.set_bench_tab(1))),
-        ("10-log", Box::new(|a: &App| {
-            let lines: Vec<slint::SharedString> = vec![
-                "00:01:08  transfer test: Initialization code not read in the first seconds: reading stopped.".into(),
-                "00:00:02  OptiRelay native started.".into(),
-            ];
-            a.set_log_lines(slint::ModelRc::new(slint::VecModel::from(lines)));
-            a.set_screen(Screen::Log);
+        ("4b-code-response", Box::new(move |a: &App| {
+            a.set_response_code(grid(1));
+            a.set_code_step(CodeStep::Response);
+        })),
+        ("5-received", Box::new(|a: &App| {
+            a.set_received_name("message.txt".into());
+            a.set_received_size("11 B".into());
+            a.set_received_mode("TM4".into());
+            a.set_received_text_preview("“Hello world”".into());
+            a.set_screen(Screen::Received);
+        })),
+        ("6-send", Box::new(|a: &App| {
+            a.set_send_name("photo.jpg".into());
+            a.set_send_detail("59.7 KB / ~7 min ON SCREEN".into());
+            a.set_send_chosen(true);
+            a.set_screen(Screen::Send);
+        })),
+        ("7-sending", Box::new(move |a: &App| {
+            a.set_sending_grid(grid(1));
+            a.set_sending_code(orp_transfer::shown_code(&orp_transfer::random_code()).into());
+            a.set_sending_sas("976 188".into());
+            a.set_sending_hud("TM4 / 250 MS / FRAME 12 / 18 S / 59.8 KB STREAM".into());
+            a.set_screen(Screen::Sending);
         })),
     ];
     let mut buffer = vec![Rgb8Pixel::default(); (L * H) as usize];

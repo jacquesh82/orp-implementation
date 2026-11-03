@@ -1,7 +1,7 @@
 /**
  * End-to-end encryption (§6): ECDH P-256 key agreement (audited standard
  * equivalent of X25519, universally available in WebCrypto), HKDF-SHA-256
- * derivation, AES-256-GCM authenticated encryption.
+ * derivation (PBKDF2-HMAC-SHA-256 for the pairing passphrase), AES-256-GCM authenticated encryption.
  *
  * Everything goes through the CryptoProvider interface: `core` depends on no
  * platform (rule 7.1-1), the browser adapter injects its own.
@@ -22,6 +22,8 @@ export interface CryptoProvider {
   /** 32-byte ECDH shared secret. */
   deriveEcdhSecret(privateKey: CryptoKey, publicKey: Uint8Array): Promise<Uint8Array>;
   deriveHkdf(secret: Uint8Array, salt: Uint8Array, info: string, length: number): Promise<Uint8Array>;
+  /** PBKDF2-HMAC-SHA-256 — stretching of the pairing passphrase (ORP v0.2). */
+  derivePbkdf2(password: Uint8Array, salt: Uint8Array, iterations: number, length: number): Promise<Uint8Array>;
   encryptAead(
     key: Uint8Array,
     nonce: Uint8Array,
@@ -76,6 +78,16 @@ export class CryptoWebCrypto implements CryptoProvider {
     const base = await subtle().importKey("raw", secret as BufferSource, "HKDF", false, ["deriveBits"]);
     const bits = await subtle().deriveBits(
       { name: "HKDF", hash: "SHA-256", salt: salt as BufferSource, info: new TextEncoder().encode(info) as BufferSource },
+      base,
+      length * 8,
+    );
+    return new Uint8Array(bits);
+  }
+
+  async derivePbkdf2(password: Uint8Array, salt: Uint8Array, iterations: number, length: number): Promise<Uint8Array> {
+    const base = await subtle().importKey("raw", password as BufferSource, "PBKDF2", false, ["deriveBits"]);
+    const bits = await subtle().deriveBits(
+      { name: "PBKDF2", hash: "SHA-256", salt: salt as BufferSource, iterations },
       base,
       length * 8,
     );

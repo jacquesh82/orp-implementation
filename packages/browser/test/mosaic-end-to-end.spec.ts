@@ -12,6 +12,7 @@ it("app → app, 3×3 mosaic: every frame read is accepted and the file is rebui
   await em.prepare(file);
   re.scanInitCode(em.initCode());
   await em.receiveResponseCode(await re.responseCode());
+  await re.receiveRevealCode(em.revealCode());
   em.confirmSas(); re.confirmSas();
   const rejections: Record<string, number> = {};
   re.events.on("rejection", ({ reason }) => { rejections[reason] = (rejections[reason] ?? 0) + 1; });
@@ -54,10 +55,10 @@ it("bench → app (bench passphrase, nothing typed): same codes, file received; 
   expect(info.byPassphrase).toBe(true);
   await good.pairWithPassphrase(BENCH_PASSPHRASE);
   expect(good.sas()).toBe(em.sas());
-  // The former defect: a receiver answering with a response code to a passphrase sender.
+  // A receiver that typed another passphrase: other keys, every frame rejected.
   const bad = new ReceiverSession(crypto);
   bad.scanInitCode(em.initCode());
-  await bad.responseCode();
+  await bad.pairWithPassphrase("not-the-bench-passphrase");
   em.confirmSas(); good.confirmSas(); bad.confirmSas();
   const refusals: string[] = [];
   bad.events.on("rejection", ({ reason }) => refusals.push(reason));

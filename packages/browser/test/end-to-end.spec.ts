@@ -8,6 +8,7 @@ import {
   ReceiverSession,
   INIT_CODE_SIZE,
   RESPONSE_CODE_SIZE,
+  REVEAL_CODE_SIZE,
 } from "@optirelay/core";
 import { TM_PALETTE, TmReceiver, simulateCapture, payloadSubframe, referenceSubframe, type SimulationOptions } from "@optirelay/optical";
 import { pairingPayload, frameCodec, isPairingFrame, pairingFrame } from "../src/tm.ts";
@@ -47,11 +48,15 @@ describe("end to end: TM4 pairing both ways, TM8 then TM4 data", () => {
     const response = pairingFrame(await receiver.responseCode());
     const decodedResponse = toWebcam(response, CODEC.COLOR_4) ?? toWebcam(response, CODEC.COLOR_4);
     await sender.receiveResponseCode(pairingPayload(decodedResponse!, RESPONSE_CODE_SIZE)!);
-    // 3. Identical SAS codes, confirmed on both sides.
+    // 3. The phone reads the reveal code (the sender's key, opening the commitment of the init code).
+    const reveal = pairingFrame(sender.revealCode());
+    const decodedReveal = toPhone(reveal, CODEC.COLOR_4) ?? toPhone(reveal, CODEC.COLOR_4);
+    await receiver.receiveRevealCode(pairingPayload(decodedReveal!, REVEAL_CODE_SIZE)!);
+    // 4. Identical SAS codes, confirmed on both sides.
     expect(sender.sas()).toBe(receiver.sas());
     sender.confirmSas();
     receiver.confirmSas();
-    // 4. Data: TM8, TM4 fallback halfway; the receiver recognizes the mode on its own.
+    // 5. Data: TM8, TM4 fallback halfway; the receiver recognizes the mode on its own.
     let sentCount = 0;
     await sender.start(async (frame) => {
       sentCount++;

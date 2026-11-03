@@ -22,6 +22,8 @@ import {
   ReceiverSession,
   INIT_CODE_SIZE,
   RESPONSE_CODE_SIZE,
+  REVEAL_CODE_SIZE,
+  pairingCodeKind,
   readInitCode,
   readMetaByMajority,
   type InitCodeInfo,
@@ -365,9 +367,13 @@ async function responseRead(bytes: Uint8Array): Promise<void> {
   e.reader?.close();
   if (e.stream) closeCamera(e.stream);
   e.stream = undefined;
+  // ORP v0.2: the code alongside becomes the REVEAL code (this computer's key,
+  // committed in the init code). The phone reads it to compute its own
+  // verification code — before that, it has none to show.
+  e.initPayload.loop(pairingFrame(e.session.revealCode()), CODEC.COLOR_4);
   $("webcam-status").textContent = "Phone's reply read";
   $("webcam-title").classList.add("ok");
-  $("webcam-help").textContent = "The recipient's key is known.";
+  $("webcam-help").textContent = "Now aim the phone at the code alongside again: it then shows its verification code.";
   $("sender-sas").textContent = sas(e.session.sas());
   // Kept for the sending view: in full screen, the SAS card is no longer
   // visible, and this code is what guarantees we talk to the right device.
@@ -446,6 +452,12 @@ async function launchSending(): Promise<void> {
       sentSymbols: toFilm.sentSymbols,
       suggestedSymbols: toFilm.suggested,
     });
+  // The reveal code also comes back within the stream, every other code
+  // repetition: a phone that missed it before the confirmation (slow motion,
+  // imported video) still gets the key it needs to compute its SAS.
+  const reveal = pairingFrame(e.session.revealCode());
+  let codeRepeats = 0;
+  const codeFrame = (t?: number) => (codeRepeats++ % 2 === 1 ? reveal : initWithState(t));
 
   // Time to pick the phone up again after confirming the SAS code. Nothing is
   // lost when aiming late: each frame is a new combination (fountain code),
@@ -453,7 +465,7 @@ async function launchSending(): Promise<void> {
   view.subframeDuration = Math.max(period, 100);
   $("send-count").hidden = false;
   for (let remaining = SENDING_COUNTDOWN; remaining > 0; remaining--) {
-    view.loop(initWithState(-remaining * 1000), CODEC.COLOR_4);
+    view.loop(codeFrame(-remaining * 1000), CODEC.COLOR_4);
     $("send-count-digit").textContent = String(remaining);
     $("send-frames").textContent = `Starting in ${remaining} s`;
     await new Promise((r) => setTimeout(r, 1000));
@@ -480,7 +492,7 @@ async function launchSending(): Promise<void> {
     throughput.frame(frame);
     toFilm.frame(readMetaByMajority(frame).symbolCount);
     if (cells === 1) {
-      if (n > 1 && (n - 1) % CODE_REPEAT === 0) await view.show(initWithState(), CODEC.COLOR_4, 1);
+      if (n > 1 && (n - 1) % CODE_REPEAT === 0) await view.show(codeFrame(), CODEC.COLOR_4, 1);
       updateHud();
       await view.show(frame, undefined, 1);
       return;
@@ -491,7 +503,7 @@ async function launchSending(): Promise<void> {
     batch.push(frame);
     const withCode = batches % BATCH_REPEAT === 0;
     if (batch.length < cells - (withCode ? 1 : 0)) return;
-    const shown = withCode ? [initWithState(), ...batch] : batch;
+    const shown = withCode ? [codeFrame(), ...batch] : batch;
     batch = [];
     batches++;
     updateHud();
@@ -568,7 +580,11 @@ let reception: {
   session: ReceiverSession;
   stream: MediaStream;
   reader: TmReader;
-  phase: "code" | "response" | "passphrase" | "data" | "done";
+  /**
+   * code → response (reply shown) → reveal (camera back on the sender, waiting
+   * for its reveal code) → sas (codes compared) → data; or code → passphrase → data.
+   */
+  phase: "code" | "response" | "reveal" | "sas" | "passphrase" | "data" | "done";
   info?: InitCodeInfo;
   /** Payload of the init code: to reopen a session with another passphrase. */
   initCodePayload?: Uint8Array;
@@ -794,7 +810,7 @@ async function reopenCamera(rec: NonNullable<typeof reception>, read = true): Pr
   const video = $<HTMLVideoElement>("video-capture");
   video.srcObject = stream;
   await video.play();
-  if (read && !rec.video && (rec.phase === "code" || rec.phase === "data")) rec.reader.start();
+  if (read && !rec.video && (rec.phase === "code" || rec.phase === "reveal" || rec.phase === "data")) rec.reader.start();
 }
 
 /** Reads a video (filmed or imported): its frames go to the same reception. */
@@ -956,10 +972,11 @@ function resetSheet(): void {
  * the same identifier, does not pass.
  */
 function isOtherSending(payload: Uint8Array, current: Uint8Array): boolean {
-  if (payload.subarray(0, 16).every((x, i) => x === current[i])) return false;
+  if (pairingCodeKind(payload) !== "init") return false; // a reveal code of the same sending
   try {
-    const info = readInitCode(payload);
-    return payload[16] === 0x04 && info.kTotal > 0 && info.blockCount > 0 && info.streamSize > 0;
+    const next = readInitCode(payload);
+    const now = readInitCode(current);
+    return !next.sessionId.every((x, i) => x === now.sessionId[i]);
   } catch {
     return false;
   }
@@ -995,7 +1012,7 @@ async function frameReceived(bytes: Uint8Array, codec: Codec): Promise<void> {
   }
   if (rec.phase === "code") {
     const payload = pairingPayload(bytes, INIT_CODE_SIZE);
-    if (!payload) return;
+    if (!payload || pairingCodeKind(payload) !== "init") return;
     rec.info = rec.session.scanInitCode(payload);
     rec.tracker = new TransferTracker(rec.info.streamSize, rec.info.kTotal);
     rec.initCodePayload = payload;
@@ -1017,10 +1034,30 @@ async function frameReceived(bytes: Uint8Array, codec: Codec): Promise<void> {
     const display = new TmDisplay($<HTMLCanvasElement>("response-canvas"), { moduleSize: 10 });
     display.loop(pairingFrame(response), CODEC.COLOR_4);
     rec.display = display;
-    $("receiver-sas").textContent = sas(rec.session.sas());
-    $("capture-sas").textContent = sas(rec.session.sas());
+    responseStep("reply");
     showView("response-screen");
     note(`initialization code read: ${readableSize(rec.info.streamSize)} announced.`);
+    return;
+  }
+  if (pairing && (rec.phase === "response" || rec.phase === "reveal")) {
+    // ORP v0.2: the sender's reveal code (its key, committed in the init code)
+    // gives the keys and the verification code. Another code: ignored.
+    const payload = pairingPayload(bytes, REVEAL_CODE_SIZE);
+    if (!payload || pairingCodeKind(payload) !== "reveal") return;
+    try {
+      await rec.session.receiveRevealCode(payload);
+    } catch (err) {
+      note(`reveal code refused: ${(err as Error).message}`);
+      return;
+    }
+    rec.phase = "sas";
+    rec.reader.stop();
+    $("receiver-sas").textContent = sas(rec.session.sas());
+    $("capture-sas").textContent = sas(rec.session.sas());
+    responseStep("compare");
+    showView("response-screen");
+    $("confirm-receive").focus();
+    note("sender's reveal code read — verification code shown.");
     return;
   }
   if (pairing) {
@@ -1032,7 +1069,7 @@ async function frameReceived(bytes: Uint8Array, codec: Codec): Promise<void> {
     }
     return;
   }
-  if (rec.phase === "response" || rec.phase === "passphrase") {
+  if (rec.phase === "response" || rec.phase === "reveal" || rec.phase === "sas" || rec.phase === "passphrase") {
     if (rec.queued.length < 20000) rec.queued.push({ bytes, codec });
     return;
   }
@@ -1130,11 +1167,25 @@ async function pairByPassphrase(rec: NonNullable<typeof reception>, passphrase: 
   $("confirm-phrase").focus();
 }
 
+/**
+ * OptiRelay Studio and the Secure Hello world example show a 12-character
+ * code, grouped for the eyes ("K7QF-M2XP-9CHR"); their passphrase is the code
+ * itself, upper case, without separators. Typed with dashes, spaces or in
+ * lower case, such a code is brought back to that form — any other
+ * passphrase is taken exactly as typed.
+ */
+const SHOWN_CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{12}$/;
+function typedPassphrase(typed: string): string {
+  const passphrase = typed.trim();
+  const code = passphrase.toUpperCase().replace(/[\s-]/g, "");
+  return SHOWN_CODE.test(code) ? code : passphrase;
+}
+
 $("form-phrase").addEventListener("submit", (e) => {
   e.preventDefault();
   const rec = reception;
   if (!rec || rec.phase !== "passphrase") return;
-  void pairByPassphrase(rec, $<HTMLInputElement>("phrase").value.trim()).catch((err) => {
+  void pairByPassphrase(rec, typedPassphrase($<HTMLInputElement>("phrase").value)).catch((err) => {
     $("phrase-error").textContent = (err as Error).message;
     $("phrase-error").hidden = false;
   });
@@ -1179,6 +1230,24 @@ function trackRejections(rec: NonNullable<typeof reception>): void {
 }
 
 $("confirm-receive").addEventListener("click", () => receiveData());
+
+/** Response screen: "reply" (code shown to the webcam) then "compare" (verification codes). */
+function responseStep(step: "reply" | "compare"): void {
+  $("response-reply").hidden = step !== "reply";
+  $("response-compare").hidden = step !== "compare";
+  $("response-title").textContent = step === "reply" ? "Show this screen to the sender's webcam" : "Compare the verification codes";
+}
+
+$("read-reveal").addEventListener("click", () => {
+  const rec = reception;
+  if (!rec || rec.phase !== "response") return;
+  rec.display?.stop();
+  rec.phase = "reveal";
+  updateSheet("Aim at the sender's screen: reading its verification code", null);
+  showView("capture-screen");
+  if (rec.mode === "live") void reopenCamera(rec).catch((e) => note(`camera: ${(e as Error).message}`));
+  note("reply shown — reading the sender's reveal code.");
+});
 
 /** After the SAS code is confirmed (strong path or passphrase): data reception. */
 function receiveData(): void {

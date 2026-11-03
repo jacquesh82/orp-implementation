@@ -14,12 +14,13 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::pairing::{
-    derive_keys, derive_keys_from_passphrase, write_init_code, write_response_code, token_of, read_init_code,
-    read_response_code, frame_nonce, SessionKeys, InitCodeInfo, SESSION_ID_SIZE,
+    commitment_of, constant_time_eq, derive_keys, derive_keys_from_passphrase, expected_k, frame_nonce,
+    read_init_code, read_response_code, read_reveal_code, token_of, transcript_hash, write_init_code,
+    write_response_code, write_reveal_code, InitCodeInfo, SessionKeys, SESSION_ID_SIZE,
 };
 use crate::blocks::{assemble, plan_blocks, BlockPlan};
-use crate::encryption::{PrivateKey, CryptoProvider};
-use crate::compression::{compress, decompress};
+use crate::encryption::{wipe, PrivateKey, CryptoProvider};
+use crate::compression::{compress, decompress_bounded};
 use crate::errors::OrpError;
 use crate::fountain::{fountain_symbol, FountainDecoder};
 use crate::log::{Log, SilentLog};
@@ -86,6 +87,9 @@ pub enum PairingMode {
 
 pub struct TransmissionOptions {
     /// "Required" by default: no authenticated pairing, no transfer.
+    /// "Optional" behaves like "Required" on the sender side (kept for API
+    /// compatibility); "Disabled" sends clear frames — the receiver must
+    /// accept them explicitly (`ReceptionOptions::encryption`).
     pub encryption: Encryption,
     /// Offered codecs, in order of preference. Default: 8 → 4 → 2 colors.
     pub codecs: Vec<Codec>,
@@ -104,6 +108,27 @@ impl Default for TransmissionOptions {
             pairing: PairingMode::Codes,
             log: Box::new(SilentLog),
         }
+    }
+}
+
+/// Default upper bound of a decompressed file (256 MiB).
+pub const DEFAULT_MAX_FILE_SIZE: usize = 256 * 1024 * 1024;
+
+pub struct ReceptionOptions {
+    /// "Required" (default): an init code announcing clear frames is
+    /// refused, and every data frame must be encrypted. "Optional" (or
+    /// "Disabled"): a sender in encryption "none" is accepted — its frames
+    /// are then authenticated by nothing but the final SHA-256 of the init
+    /// code.
+    pub encryption: Encryption,
+    /// Upper bound of the decompressed file: a deflate bomb stops there.
+    pub max_file_size: usize,
+    pub log: Box<dyn Log + Send>,
+}
+
+impl Default for ReceptionOptions {
+    fn default() -> Self {
+        Self { encryption: Encryption::Required, max_file_size: DEFAULT_MAX_FILE_SIZE, log: Box::new(SilentLog) }
     }
 }
 
@@ -210,6 +235,8 @@ pub struct SenderSession {
     session_id: Vec<u8>,
     priv_pair: Option<PrivateKey>,
     pub_pair: Option<Vec<u8>>,
+    commitment: Option<[u8; 32]>,
+    reveal_code: Option<Vec<u8>>,
     keys: Option<SessionKeys>,
     plan: Option<BlockPlan>,
     stream_size: usize,
@@ -242,6 +269,8 @@ impl SenderSession {
             session_id: vec![0; SESSION_ID_SIZE],
             priv_pair: None,
             pub_pair: None,
+            commitment: None,
+            reveal_code: None,
             keys: None,
             plan: None,
             stream_size: 0,
@@ -292,6 +321,7 @@ impl SenderSession {
         }
         self.session_id = self.crypto.random_bytes(SESSION_ID_SIZE);
         let pair = self.crypto.generate_ecdh_pair()?;
+        self.commitment = Some(commitment_of(self.crypto.as_ref(), &self.session_id, &pair.public_key));
         self.priv_pair = Some(pair.private_key);
         self.pub_pair = Some(pair.public_key.to_vec());
         let mut compressed = None;
@@ -328,42 +358,70 @@ impl SenderSession {
             .ok_or_else(|| OrpError::PairingRequired("keys not derived — pairing incomplete".into()))
     }
 
-    /// Payload of the init code — the optical layer encodes it.
+    /// Payload of the init code — the optical layer encodes it. Same bytes
+    /// on every call (they enter the transcript): nothing in it is drawn at
+    /// call time.
     pub fn init_code(&self) -> Result<Vec<u8>, OrpError> {
         let plan = self.plan_required()?;
-        let sender_pub = self.pub_pair.as_ref().ok_or_else(|| {
+        let commitment = self.commitment.ok_or_else(|| {
             OrpError::PairingRequired("prepare() must run before the init code".into())
         })?;
         write_init_code(&InitCodeInfo {
             session_id: self.session_id.clone(),
-            sender_pub: sender_pub.clone(),
+            commitment: commitment.to_vec(),
             stream_size: self.stream_size as u64,
             stream_digest: self.stream_digest.map(|e| e.to_vec()).unwrap_or_default(),
             block_count: plan.block_count() as u32,
             k_total: plan.k_total() as u32,
             compressed: self.compressed,
             by_passphrase: self.by_passphrase,
+            encrypted: self.encryption_enabled,
         })
     }
 
-    /// Strong mode: reads the response code (receiver pub), derives the keys.
+    /// Strong path, step 2: reads the response code (receiver pub), derives
+    /// the keys and the SAS. The reveal code (`reveal_code()`) must then be
+    /// shown to the receiver: without it, it cannot compute its own SAS.
     pub fn receive_response_code(&mut self, code: &[u8]) -> Result<(), OrpError> {
         require_state("receiveResponseCode", self.state, &[SessionState::Pairing])?;
-        let private = self.priv_pair.as_ref().ok_or_else(|| OrpError::PairingRequired("ephemeral key pair missing".into()))?;
+        if self.by_passphrase {
+            return Err(OrpError::invalid_state("receiveResponseCode", "passphrase pairing"));
+        }
+        let (Some(private), Some(public)) = (self.priv_pair.as_ref(), self.pub_pair.as_ref()) else {
+            return Err(OrpError::PairingRequired("ephemeral key pair missing".into()));
+        };
         let decoded = read_response_code(code)?;
         if decoded.session_id != self.session_id {
             return Err(OrpError::InvalidPairingCode("response code from another session".into()));
         }
-        let secret = self.crypto.ecdh_agree(private, &decoded.receiver_pub)?;
-        self.keys = Some(derive_keys(self.crypto.as_ref(), &secret, &self.session_id, decoded.sas_seed)?);
+        let init = self.init_code()?;
+        let reveal = write_reveal_code(&self.session_id, public)?;
+        let mut secret = self.crypto.ecdh_agree(private, &decoded.receiver_pub)?;
+        let transcript = transcript_hash(self.crypto.as_ref(), &init, Some(code), Some(&reveal));
+        let keys = derive_keys(self.crypto.as_ref(), &secret, &transcript);
+        wipe(&mut secret);
+        self.keys = Some(keys?);
+        self.reveal_code = Some(reveal);
         self.state = SessionState::Sas;
         Ok(())
     }
 
-    /// Degraded mode: shared passphrase — derived SAS seed, zero coordination.
+    /// Strong path, step 3: the reveal code (sender pub) to display for the
+    /// receiver once its response code has been read — it opens the
+    /// commitment of the init code.
+    pub fn reveal_code(&self) -> Result<Vec<u8>, OrpError> {
+        self.reveal_code.clone().ok_or_else(|| OrpError::PairingRequired("response code not received yet".into()))
+    }
+
+    /// Degraded path: shared passphrase typed on both sides, stretched by
+    /// PBKDF2, bound to the init code.
     pub fn receive_passphrase(&mut self, passphrase: &str) -> Result<(), OrpError> {
         require_state("receivePassphrase", self.state, &[SessionState::Pairing])?;
-        self.keys = Some(derive_keys_from_passphrase(self.crypto.as_ref(), passphrase, &self.session_id)?);
+        if !self.by_passphrase {
+            return Err(OrpError::invalid_state("receivePassphrase", "pairing by codes"));
+        }
+        let init = self.init_code()?;
+        self.keys = Some(derive_keys_from_passphrase(self.crypto.as_ref(), passphrase, &init)?);
         self.state = SessionState::Sas;
         Ok(())
     }
@@ -573,6 +631,7 @@ impl SenderSession {
         self.priv_pair = None;
         self.pub_pair = None;
         self.stream_digest = None;
+        self.reveal_code = None;
     }
 }
 
@@ -598,12 +657,15 @@ pub struct ReceiverSession {
     state: SessionState,
     crypto: Box<dyn CryptoProvider + Send>,
     log: Box<dyn Log + Send>,
+    accept_clear: bool,
+    max_file_size: usize,
 
     info: Option<InitCodeInfo>,
+    init_code: Option<Vec<u8>>,
+    response_code: Option<Vec<u8>>,
     keys: Option<SessionKeys>,
     priv_pair: Option<PrivateKey>,
     decoders: HashMap<u32, FountainDecoder>,
-    k_seen: HashMap<u32, u16>,
     views: HashSet<(u32, u32)>,
     announced_complete: bool,
     stats: Stats,
@@ -615,16 +677,23 @@ impl ReceiverSession {
     }
 
     pub fn with_log(crypto: Box<dyn CryptoProvider + Send>, log: Box<dyn Log + Send>) -> Self {
+        Self::with_options(crypto, ReceptionOptions { log, ..ReceptionOptions::default() })
+    }
+
+    pub fn with_options(crypto: Box<dyn CryptoProvider + Send>, options: ReceptionOptions) -> Self {
         Self {
             listeners: Vec::new(),
             state: SessionState::Initial,
             crypto,
-            log,
+            log: options.log,
+            accept_clear: options.encryption != Encryption::Required,
+            max_file_size: options.max_file_size,
             info: None,
+            init_code: None,
+            response_code: None,
             keys: None,
             priv_pair: None,
             decoders: HashMap::new(),
-            k_seen: HashMap::new(),
             views: HashSet::new(),
             announced_complete: false,
             stats: Stats::default(),
@@ -649,34 +718,81 @@ impl ReceiverSession {
         self.info.as_ref().map(|i| token_of(&i.session_id))
     }
 
-    /// Reads the init code shown by the sender.
+    /// Reads the init code shown by the sender. Refuses a sender announcing
+    /// clear frames unless the receiver accepts them (`ReceptionOptions`).
     pub fn show_init_code(&mut self, code: &[u8]) -> Result<InitCodeInfo, OrpError> {
         require_state("scanInitCode", self.state, &[SessionState::Initial])?;
         let decoded = read_init_code(code)?;
+        if !decoded.encrypted && !self.accept_clear {
+            return Err(OrpError::InvalidPairingCode(
+                "the sender announces clear frames, this receiver requires encryption".into(),
+            ));
+        }
         self.info = Some(decoded.clone());
+        self.init_code = Some(code.to_vec());
         self.state = SessionState::Pairing;
         Ok(decoded)
     }
 
-    /// Strong mode: produces the response code for the sender to scan.
+    /// Strong path, step 2: produces the response code for the sender to
+    /// scan (the same bytes on every call). The keys and the SAS only exist
+    /// once the reveal code has been read (`receive_reveal_code`).
     pub fn response_code(&mut self) -> Result<Vec<u8>, OrpError> {
         require_state("responseCode", self.state, &[SessionState::Pairing])?;
-        let info = self.info_required()?.clone();
+        let info = self.info_required()?;
+        if info.by_passphrase {
+            return Err(OrpError::invalid_state("responseCode", "passphrase pairing"));
+        }
+        if let Some(code) = &self.response_code {
+            return Ok(code.clone());
+        }
+        let session_id = info.session_id.clone();
         let pair = self.crypto.generate_ecdh_pair()?;
-        let a = self.crypto.random_bytes(4);
-        let sas_seed = u32::from_be_bytes([a[0], a[1], a[2], a[3]]);
-        let secret = self.crypto.ecdh_agree(&pair.private_key, &info.sender_pub)?;
+        let code = write_response_code(&session_id, &pair.public_key)?;
         self.priv_pair = Some(pair.private_key);
-        self.keys = Some(derive_keys(self.crypto.as_ref(), &secret, &info.session_id, sas_seed)?);
-        self.state = SessionState::Sas;
-        write_response_code(&info.session_id, &pair.public_key, sas_seed)
+        self.response_code = Some(code.clone());
+        Ok(code)
     }
 
-    /// Degraded mode: shared passphrase — same keys as the sender.
+    /// Strong path, step 3: reads the reveal code (sender pub), checks it
+    /// opens the commitment of the init code, derives the keys and the SAS.
+    pub fn receive_reveal_code(&mut self, code: &[u8]) -> Result<(), OrpError> {
+        require_state("receiveRevealCode", self.state, &[SessionState::Pairing])?;
+        let info = self.info_required()?;
+        let (Some(private), Some(response), Some(init)) =
+            (self.priv_pair.as_ref(), self.response_code.as_ref(), self.init_code.as_ref())
+        else {
+            return Err(OrpError::PairingRequired("response code not produced yet".into()));
+        };
+        let decoded = read_reveal_code(code)?;
+        if decoded.session_id != info.session_id {
+            return Err(OrpError::InvalidPairingCode("reveal code from another session".into()));
+        }
+        let expected = commitment_of(self.crypto.as_ref(), &info.session_id, &decoded.sender_pub);
+        if !constant_time_eq(&expected, &info.commitment) {
+            return Err(OrpError::InvalidPairingCode(
+                "the reveal code does not open the commitment of the init code".into(),
+            ));
+        }
+        let mut secret = self.crypto.ecdh_agree(private, &decoded.sender_pub)?;
+        let transcript = transcript_hash(self.crypto.as_ref(), init, Some(response), Some(code));
+        let keys = derive_keys(self.crypto.as_ref(), &secret, &transcript);
+        wipe(&mut secret);
+        self.keys = Some(keys?);
+        self.priv_pair = None;
+        self.state = SessionState::Sas;
+        Ok(())
+    }
+
+    /// Degraded path: shared passphrase, stretched by PBKDF2, bound to the
+    /// init code.
     pub fn pair_by_passphrase(&mut self, passphrase: &str) -> Result<(), OrpError> {
         require_state("pairWithPassphrase", self.state, &[SessionState::Pairing])?;
-        let session_id = self.info_required()?.session_id.clone();
-        self.keys = Some(derive_keys_from_passphrase(self.crypto.as_ref(), passphrase, &session_id)?);
+        if !self.info_required()?.by_passphrase {
+            return Err(OrpError::invalid_state("pairWithPassphrase", "pairing by codes"));
+        }
+        let init = self.init_code.clone().unwrap_or_default();
+        self.keys = Some(derive_keys_from_passphrase(self.crypto.as_ref(), passphrase, &init)?);
         self.state = SessionState::Sas;
         Ok(())
     }
@@ -707,7 +823,9 @@ impl ReceiverSession {
             self.state,
             &[SessionState::Calibrated, SessionState::Transmission, SessionState::Finished],
         )?;
-        self.state = SessionState::Transmission;
+        if self.state == SessionState::Calibrated {
+            self.state = SessionState::Transmission;
+        }
         let parsed = match read_frame(t) {
             Ok(l) => l,
             Err(OrpError::CorruptedFrame { .. }) => {
@@ -724,11 +842,28 @@ impl ReceiverSession {
             // Service frames: test pattern and pairing take another path.
             return Ok(FrameStatus::Accepted);
         }
-        let session_token = token_of(&self.info_required()?.session_id);
+        let info = self.info_required()?;
+        let (session_token, stream_size, announced_encrypted) =
+            (token_of(&info.session_id), info.stream_size, info.encrypted);
         self.keys_required()?;
         if header.token != session_token {
             self.log.warn("frame from an unknown session", &[("token", header.token.into())]);
             return Err(OrpError::UnknownSession(header.token));
+        }
+        // Frame outside the layout announced by the init code: block that
+        // does not exist, or K that is not the one of the block. Rejected
+        // before any allocation — a decoder per forged block number would
+        // grow without bound.
+        if header.k as u32 != expected_k(stream_size, header.block) {
+            return Ok(self.reject(Rejection::Invalid, Some(header.block), Some(header.seed)));
+        }
+        // Encryption announced by the init code (bound to the keys by the
+        // transcript): a clear frame in an encrypted session is a forgery,
+        // never a frame to decode.
+        let encrypted = header.flags & FLAG_ENCRYPTED != 0;
+        if encrypted != announced_encrypted {
+            self.stats.forged += 1;
+            return Ok(self.reject(Rejection::Forged, Some(header.block), Some(header.seed)));
         }
         // Replay: (block, seed) already seen — ignored, counted, never decoded again.
         let key = (header.block, header.seed);
@@ -737,7 +872,7 @@ impl ReceiverSession {
             return Ok(self.reject(Rejection::Replay, Some(header.block), Some(header.seed)));
         }
         let mut payload = parsed.payload;
-        if header.flags & FLAG_ENCRYPTED != 0 {
+        if encrypted {
             match self.decrypt(t, &header, &payload, parsed.tag.as_deref()) {
                 Ok(plaintext) => payload = plaintext,
                 Err(_) => {
@@ -783,16 +918,8 @@ impl ReceiverSession {
             .ok_or_else(|| OrpError::PairingRequired("keys not derived — pairing incomplete".into()))
     }
 
+    /// Decoder of a block — its K was checked against the announced layout.
     fn decoder_for(&mut self, block: u32, k: u16) -> Result<&mut FountainDecoder, OrpError> {
-        match self.k_seen.get(&block) {
-            None => {
-                self.k_seen.insert(block, k);
-            }
-            Some(&known) if known != k => {
-                return Err(OrpError::generic("k-incoherent", format!("inconsistent K for block {block}")));
-            }
-            Some(_) => {}
-        }
         Ok(match self.decoders.entry(block) {
             std::collections::hash_map::Entry::Occupied(o) => o.into_mut(),
             std::collections::hash_map::Entry::Vacant(v) => v.insert(FountainDecoder::new(k as usize)?),
@@ -826,17 +953,14 @@ impl ReceiverSession {
 
     /// State of EACH block. The file is only complete if all of them are: a
     /// symbol total ≥ K says nothing about a lagging block. K of a block never
-    /// seen yet: estimated from what remains.
+    /// seen yet: the one implied by the announced stream size.
     pub fn blocks(&self) -> Vec<BlockState> {
-        let nb = self.total_block_count() as usize;
-        let k_total = self.info.as_ref().map(|i| i.k_total as usize).unwrap_or(0);
-        let known_total: usize = self.k_seen.values().map(|&k| k as usize).sum();
-        let missing = (0..nb as u32).filter(|b| !self.k_seen.contains_key(b)).count();
-        let estimated_k = if missing > 0 { k_total.saturating_sub(known_total).div_ceil(missing).max(1) } else { 1 };
-        (0..nb as u32)
+        let nb = self.total_block_count();
+        let size = self.info.as_ref().map(|i| i.stream_size).unwrap_or(0);
+        (0..nb)
             .map(|b| match self.decoders.get(&b) {
                 Some(d) => BlockState { k: d.k(), received_count: d.received_symbols(), complete: d.is_complete() },
-                None => BlockState { k: estimated_k, received_count: 0, complete: false },
+                None => BlockState { k: expected_k(size, b) as usize, received_count: 0, complete: false },
             })
             .collect()
     }
@@ -865,7 +989,7 @@ impl ReceiverSession {
             return Err(OrpError::Integrity("the SHA-256 digest of the rebuilt stream does not match".into()));
         }
         if info.compressed {
-            stream = decompress(&stream)?;
+            stream = decompress_bounded(&stream, self.max_file_size)?;
         }
         self.state = SessionState::Finished;
         Ok(ReceiveResult { data: stream, checked: true })
@@ -875,5 +999,10 @@ impl ReceiverSession {
         self.keys = None;
         self.priv_pair = None;
         self.decoders.clear();
+    }
+
+    /// Init code read (raw bytes), if any.
+    pub fn init_code(&self) -> Option<&[u8]> {
+        self.init_code.as_deref()
     }
 }

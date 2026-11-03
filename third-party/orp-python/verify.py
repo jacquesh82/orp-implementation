@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replays the ORP v0.1 interoperability vectors — checklist §10.4 of the guide, items 1 to 9.
+"""Replays the ORP v0.2 interoperability vectors — checklist §10.4 of the guide, items 1 to 9.
 
 Usage: python3 -I verify.py <vector directory, e.g. ../../native/vectors/core>
 One item = one domain; a failure prints the first diverging cases and the total.
@@ -18,7 +18,9 @@ from orp.encryption import (aead_decrypt, aead_encrypt, frame_nonce, hkdf, hmac_
                             key_pair_from_scalar, sha256, shared_secret)
 from orp.fountain import Decoder, neighbors, symbol
 from orp.frames import build, read
-from orp.pairing import init_code, keys, passphrase_path, read_init_code, response_code, token
+from orp.pairing import (commitment, expected_layout, init_code, keys, passphrase_keys, passphrase_secret,
+                         read_init_code, read_response_code, read_reveal_code, response_code, reveal_code,
+                         token, transcript)
 from orp.primitives import crc32, mulberry32, prng_bytes
 from orp.rs import correct, parity
 from orp.session import Receiver, Sender
@@ -191,9 +193,14 @@ def verify_encryption(v: dict) -> list[str]:
 def verify_pairing(v: dict) -> list[str]:
     failures = []
     for i, case in enumerate(v["initCodes"]):
-        code = init_code(hx(case["sessionId"]), hx(case["senderPublicKey"]), case["streamSize"],
+        commit = commitment(hx(case["sessionId"]), hx(case["senderPublicKey"]))
+        if commit != hx(case["commitment"]):
+            failures.append(f"initCodes {i}: commitment diverges")
+        if expected_layout(case["streamSize"]) != (case["blockCount"], case["kTotal"]):
+            failures.append(f"initCodes {i}: layout diverges")
+        code = init_code(hx(case["sessionId"]), commit, case["streamSize"],
                          hx(case["streamDigest"]), case["blockCount"], case["kTotal"],
-                         case["compressed"], case["byPassphrase"])
+                         case["compressed"], case["byPassphrase"], case["encrypted"])
         if code != hx(case["code"]):
             failures.append(f"initCodes {i}: code diverges")
         decoded = read_init_code(code)
@@ -201,26 +208,43 @@ def verify_pairing(v: dict) -> list[str]:
                      "streamSize": decoded["stream_size"]}
         if read_back != case["readBack"]:
             failures.append(f"initCodes {i}: re-read diverges")
+    readers = {"init": read_init_code, "response": read_response_code, "reveal": read_reveal_code}
+    for i, case in enumerate(v["invalidCodes"]):
+        try:
+            readers[case["kind"]](hx(case["code"]))
+            failures.append(f"invalidCodes {i}: accepted although {case['error']} expected")
+        except OrpError as e:
+            if e.code != case["error"]:
+                failures.append(f"invalidCodes {i}: {e.code} vs {case['error']}")
     for i, case in enumerate(v["responseCodes"]):
-        code = response_code(hx(case["sessionId"]), hx(case["receiverPublicKey"]), case["sasSeed"])
-        if code != hx(case["code"]):
+        code = response_code(hx(case["sessionId"]), hx(case["receiverPublicKey"]))
+        if code != hx(case["code"]) or read_response_code(code)["pub"] != hx(case["receiverPublicKey"]):
             failures.append(f"responseCodes {i}: code diverges")
+    for i, case in enumerate(v["revealCodes"]):
+        code = reveal_code(hx(case["sessionId"]), hx(case["senderPublicKey"]))
+        if code != hx(case["code"]) or read_reveal_code(code)["pub"] != hx(case["senderPublicKey"]):
+            failures.append(f"revealCodes {i}: code diverges")
+    for i, case in enumerate(v["transcripts"]):
+        th = transcript(hx(case["init"]), hx(case["response"] or ""), hx(case["reveal"] or ""))
+        if th != hx(case["hash"]):
+            failures.append(f"transcripts {i}: hash diverges")
     for i, case in enumerate(v["keys"]):
-        d, n, sas = keys(hx(case["secret"]), hx(case["sessionId"]), case["sasSeed"])
+        d, n, sas = keys(hx(case["secret"]), hx(case["transcript"]))
         if d != hx(case["dataKey"]) or n != hx(case["nonceKey"]) or sas != int(case["sas"]):
             failures.append(f"keys {i}: SAS obtained {sas} vs {case['sas']}")
     for i, case in enumerate(v["passphrases"]):
         if case.get("error"):
             try:
-                passphrase_path(case["passphrase"], hx(case["sessionId"]))
+                passphrase_keys(case["passphrase"], hx(case["initCode"]))
                 failures.append(f"passphrases {i}: accepted although {case['error']} expected")
             except OrpError as e:
                 if e.code != case["error"]:
                     failures.append(f"passphrases {i}: {e.code} vs {case['error']}")
             continue
-        secret, ss = passphrase_path(case["passphrase"], hx(case["sessionId"]))
-        d, n, sas = keys(secret, hx(case["sessionId"]), ss)
-        if secret != hx(case["secret"]) or ss != case["sasSeed"] or d != hx(case["dataKey"]) or sas != int(case["sas"]):
+        secret = passphrase_secret(case["passphrase"], hx(case["sessionId"]))
+        d, n, sas = passphrase_keys(case["passphrase"], hx(case["initCode"]))
+        if secret != hx(case["secret"]) or d != hx(case["dataKey"]) or n != hx(case["nonceKey"]) \
+                or sas != int(case["sas"]):
             failures.append(f"passphrases {i}: derivation diverges")
     for i, case in enumerate(v["nonces"]):
         if frame_nonce(hx(case["key"]), case["block"], case["seed"]) != hx(case["nonce"]):
@@ -254,7 +278,8 @@ def verify_sessions(v: dict) -> list[str]:
         label = f"session {i} ({sc['name']})"
         sender = Sender(sc["senderSeed"], sc.get("codecs", [3]), sc.get("fallback"),
                         encrypt=sc["encryption"] == "required")
-        receiver = Receiver(sc["receiverSeed"] if sc["pairing"] == "codes" else None)
+        receiver = Receiver(sc["receiverSeed"] if sc["pairing"] == "codes" else None,
+                            accept_clear=sc["encryption"] == "none")
         file = hx(sc["file"])
         stream = file
         is_compressed = bool(sc["compression"])
@@ -277,15 +302,18 @@ def verify_sessions(v: dict) -> list[str]:
                 continue
         else:
             receiver.accept_init(sender.code)
-            if receiver.pair_strong() != int(sc["sas"]):
-                failures.append(f"{label}: receiver SAS diverges")
-                continue
             response = receiver.produce_response()
             if response != hx(sc["responseCode"]):
                 failures.append(f"{label}: response code diverges")
                 continue
             if sender.accept_response(response) != int(sc["sas"]):
                 failures.append(f"{label}: sender SAS diverges")
+                continue
+            if sender.reveal != hx(sc["revealCode"]):
+                failures.append(f"{label}: reveal code diverges")
+                continue
+            if receiver.accept_reveal(sender.reveal) != int(sc["sas"]):
+                failures.append(f"{label}: receiver SAS diverges")
                 continue
         sent = sender.send(sc["passes"])
         expected = [hx(t) for t in sc["frames"]]
@@ -325,7 +353,8 @@ def main():
     report.item(5, "Splitting into blocks", 7, verify_blocks(load("blocks")))
     report.item(6, "Fountain", 1395, verify_fountain(load("fountain")))
     report.item(7, "Cryptographic primitives", 25, verify_encryption(load("encryption")))
-    report.item(8, "Pairing", 25, verify_pairing(load("pairing")))
+    pairing = load("pairing")
+    report.item(8, "Pairing", sum(len(pairing[k]) for k in pairing), verify_pairing(pairing))
     report.item(8, "deflate-raw compression", 5, verify_compression(load("compression")))
     report.item(9, "Complete sessions", 5, verify_sessions(load("sessions")))
     print()
@@ -334,7 +363,7 @@ def main():
         print(f"  item {number} — {name}: {total - fail_count}/{total} — {status}")
         green = green and not fail_count
     print()
-    print("CHECKLIST §10.4 (items 1–9):", "GREEN" if green else "FAILING")
+    print("CHECKLIST §10.4 (items 1–9, ORP v0.2):", "GREEN" if green else "FAILING")
     sys.exit(0 if green else 1)
 
 

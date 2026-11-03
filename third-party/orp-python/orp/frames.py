@@ -11,7 +11,7 @@ from .primitives import crc32
 from .rs import correct, parity
 
 MAGIC = b"\x4f\x52"
-VERSION = (0, 1)
+VERSION = (0, 2)
 CODECS = {1: "MONO_2", 2: "COLOR_4", 3: "COLOR_8"}
 META_SIZE = 8
 HEADER_SIZE = 14

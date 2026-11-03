@@ -1,9 +1,8 @@
-//! Sending a file from the phone screen, like the test bench
-//! (apps/lab, emettreFichier): PASSPHRASE pairing (the sender needs no
-//! camera), init code during the countdown then repeated in the stream,
-//! frames as a single grid or as a mosaic.
+//! Sending a file from the phone screen, like OptiRelay Studio
+//! (examples/studio, live.ts): PASSPHRASE pairing (the sender needs no
+//! camera) on a random code shown as text next to the grid, encryption
+//! required; init code then data, frames as a single grid (or a mosaic).
 
-use crate::pairing::BENCH_PASSPHRASE;
 use crate::file::{pack, TransferredFile};
 use orp_core::session::{TransmissionOptions, SenderSession, PairingMode};
 use orp_core::{build_frame, Codec, CryptoRust, FrameHeader, OrpError, FLAG_PAIRING, SYMBOL_SIZE, FRAME_VERSION};
@@ -14,6 +13,9 @@ use orp_optics::temporal::{payload_subframe, reference_subframe, PALETTE_TM};
 const CODE_RETRY: u64 = 10;
 /// Mosaic: it takes one cell in one batch out of three.
 const BATCH_RETRY: u64 = 3;
+/// Subframe duration (ms) of the Studio's safe default: readable live by
+/// any camera, LCD included.
+pub const DEFAULT_PERIOD_MS: u32 = 250;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SendSettings {
@@ -24,7 +26,7 @@ pub struct SendSettings {
     pub columns: usize,
 }
 
-/// Pairing frame (init code or response code), in TM4.
+/// Pairing frame (init, response or reveal code), in TM4.
 pub fn pairing_frame(user_payload: &[u8]) -> Result<Vec<u8>, OrpError> {
     pairing_frame_with_state(user_payload, None)
 }
@@ -48,6 +50,8 @@ pub fn pairing_frame_with_state(user_payload: &[u8], state: Option<&crate::state
 pub struct Sender {
     session: SenderSession,
     pub settings: SendSettings,
+    /// The pairing code (passphrase), to show as text: "K7QF-M2XP-9CHR".
+    pub passphrase: String,
     /// Init code frame (TM4).
     pub init: Vec<u8>,
     /// Verification code, shown below the grid.
@@ -65,12 +69,14 @@ pub struct Sender {
 }
 
 impl Sender {
-    pub fn new(file: &TransferredFile, settings: SendSettings) -> Result<Self, OrpError> {
+    /// `passphrase`: the code drawn by `random_code` (the receiver types it).
+    /// Encryption stays required (`TransmissionOptions` default).
+    pub fn new(file: &TransferredFile, settings: SendSettings, passphrase: &str) -> Result<Self, OrpError> {
         let options = TransmissionOptions { codecs: vec![settings.codec], pairing: PairingMode::Passphrase, ..TransmissionOptions::default() };
         let mut session = SenderSession::new(Box::new(CryptoRust::new()), options)?;
         let stream = pack(file);
         session.prepare(&stream)?;
-        session.receive_passphrase(BENCH_PASSPHRASE)?;
+        session.receive_passphrase(passphrase)?;
         let sas = session.sas()?;
         session.confirm_sas()?;
         session.calibrate(Some(settings.codec))?;
@@ -82,6 +88,7 @@ impl Sender {
         Ok(Self {
             session,
             settings,
+            passphrase: passphrase.to_string(),
             init,
             sas,
             stream_size: stream.len(),
@@ -104,6 +111,11 @@ impl Sender {
             advised_symbols: self.advised,
         };
         pairing_frame_with_state(&self.code, Some(&state)).unwrap_or_else(|_| self.init.clone())
+    }
+
+    /// Next DATA frame (Studio loop: init code, then this frame twice).
+    pub fn next_data_frame(&mut self) -> Result<Vec<u8>, OrpError> {
+        self.next_session_frame()
     }
 
     /// Next data frame, counted (sent symbols, counter start).
@@ -176,7 +188,8 @@ mod tests {
             mime_type: "text/plain".into(),
             data: (0..6000u32).map(|i| (i * 7 + i / 13) as u8).collect(),
         };
-        let mut em = Sender::new(&file, SendSettings { codec: Codec::Color8, period_ms: 33, columns }).unwrap();
+        let code = crate::pairing::random_code();
+        let mut em = Sender::new(&file, SendSettings { codec: Codec::Color8, period_ms: 33, columns }, &code).unwrap();
         let mut pipeline = TmPipeline::new(&TmReceiverOptions::default());
         let mut rec = Receiver::new();
         let mut received = None;
@@ -200,8 +213,11 @@ mod tests {
                     }
                     for e in rec.process(&frame.bytes).unwrap() {
                         match e {
-                            Event::CodeRead { sas, .. } => {
-                                assert_eq!(sas, em.sas);
+                            Event::CodeRead { sas, by_passphrase, .. } => {
+                                // Passphrase path: no SAS before the code is typed.
+                                assert_eq!((sas, by_passphrase), (None, true));
+                                let shown = crate::pairing::shown_code(&em.passphrase);
+                                assert_eq!(rec.pair_with_passphrase(&shown).unwrap(), em.sas);
                                 for e in rec.confirm().unwrap() {
                                     if let Event::File(f) = e {
                                         received = Some(f);
@@ -226,8 +242,9 @@ mod tests {
         assert!(states.iter().all(|e| e.advised_symbols > 0));
     }
 
-    /// Strong mode (sender with a camera, like the web app): the receiver returns
-    /// a response code; the sender reads it; verification codes match.
+    /// Strong mode (sender with a camera, like the web app), ORP v0.2: the
+    /// receiver returns a response code; the sender reads it and shows its
+    /// reveal code; the receiver reads it — verification codes match.
     #[test]
     fn strong_mode() {
         use orp_core::session::{TransmissionOptions, SenderSession};
@@ -237,11 +254,27 @@ mod tests {
         let init = pairing_frame(&em.init_code().unwrap()).unwrap();
         let mut rec = Receiver::new();
         let events = rec.process(&init).unwrap();
-        let Some(Event::CodeRead { sas, by_passphrase, response_code: Some(response), .. }) = events.first().cloned() else {
-            panic!("expected a read code with a response code: {events:?}");
+        let Some(Event::CodeRead { sas: None, by_passphrase, response_code: Some(response), .. }) = events.first().cloned() else {
+            panic!("expected a read code with a response code and no SAS yet: {events:?}");
         };
         assert!(!by_passphrase);
-        em.receive_response_code(&response).unwrap();
+        assert_eq!(rec.phase, crate::receiving::ReceivePhase::Reveal);
+        // The response code travels as a pairing frame too.
+        let (kind, read_back) = crate::pairing::pairing_code(&pairing_frame(&response).unwrap()).unwrap();
+        assert_eq!((kind, &read_back), (orp_core::pairing::PairingCodeKind::Response, &response));
+        em.receive_response_code(&read_back).unwrap();
+        // While the sender shows its reveal code, its init code may still come
+        // round: same sending, no effect.
+        assert!(rec.process(&init).unwrap().is_empty());
+        // A reveal code that does not open the commitment is refused.
+        let mut forged = em.reveal_code().unwrap();
+        forged[40] ^= 1;
+        assert!(rec.process(&pairing_frame(&forged).unwrap()).unwrap().is_empty());
+        assert_eq!((rec.refused_reveals, rec.phase), (1, crate::receiving::ReceivePhase::Reveal));
+        let events = rec.process(&pairing_frame(&em.reveal_code().unwrap()).unwrap()).unwrap();
+        let Some(Event::RevealRead { sas }) = events.first().cloned() else {
+            panic!("expected the reveal code read: {events:?}");
+        };
         assert_eq!(em.sas().unwrap(), sas, "verification codes match");
         em.confirm_sas().unwrap();
         em.calibrate(Some(Codec::Color8)).unwrap();
@@ -266,11 +299,135 @@ mod tests {
         assert_eq!(next.phase, crate::receiving::ReceivePhase::Code);
     }
 
+    /// A Studio-style sender (examples/studio live.ts): passphrase session
+    /// on its own random code, TM4, loop "init code, data frame". Session
+    /// level, no optics.
+    fn studio_sender(file: &TransferredFile, code: &str) -> (SenderSession, Vec<u8>, String) {
+        use orp_core::session::{PairingMode, TransmissionOptions};
+        let mut em = SenderSession::new(
+            Box::new(CryptoRust::new()),
+            TransmissionOptions { codecs: vec![Codec::Color4], pairing: PairingMode::Passphrase, ..TransmissionOptions::default() },
+        )
+        .unwrap();
+        em.prepare(&crate::file::pack(file)).unwrap();
+        em.receive_passphrase(code).unwrap();
+        let sas = em.sas().unwrap();
+        em.confirm_sas().unwrap();
+        em.calibrate(Some(Codec::Color4)).unwrap();
+        let init = pairing_frame(&em.init_code().unwrap()).unwrap();
+        em.start(0).unwrap();
+        (em, init, sas)
+    }
+
+    /// Studio sender → native receiver: the code read, the receiver asks for
+    /// the code (no SAS before), the code TYPED — grouped, lower case —
+    /// gives the sender's SAS, and the frames set aside meanwhile are kept.
+    #[test]
+    fn studio_sender_to_native_receiver() {
+        let file = TransferredFile { name: "message.txt".into(), mime_type: "text/plain".into(), data: b"Hello world".to_vec() };
+        let (mut em, init, sender_sas) = studio_sender(&file, "K7QFM2XP9CHR");
+        let mut rec = Receiver::new();
+        let events = rec.process(&init).unwrap();
+        let Some(Event::CodeRead { sas: None, by_passphrase: true, response_code: None, .. }) = events.first().cloned() else {
+            panic!("expected a passphrase init code: {events:?}");
+        };
+        assert!(rec.needs_code());
+        // A data frame read before the code is typed: set aside. The init
+        // code coming round again (Studio loop) has no effect.
+        let early = em.next_frame().unwrap().unwrap();
+        assert!(rec.process(&early).unwrap().is_empty());
+        assert!(rec.process(&init).unwrap().is_empty());
+        assert_eq!(rec.pair_with_passphrase(" k7qf-m2xp-9chr ").unwrap(), sender_sas);
+        let mut received = None;
+        for e in rec.confirm().unwrap() {
+            if let Event::File(f) = e {
+                received = Some(f);
+            }
+        }
+        for _ in 0..50 {
+            if received.is_some() {
+                break;
+            }
+            assert!(rec.process(&init).unwrap().is_empty());
+            for e in rec.process(&em.next_frame().unwrap().unwrap()).unwrap() {
+                if let Event::File(f) = e {
+                    received = Some(f);
+                }
+            }
+        }
+        assert_eq!(received.expect("file received"), file);
+    }
+
+    /// A wrong code typed and confirmed anyway: the frames do not
+    /// authenticate — after 3 forged, the code is asked again, and the right
+    /// one finishes the transfer with the frames refused meanwhile.
+    #[test]
+    fn wrong_code_asked_again() {
+        let file = TransferredFile { name: "m.bin".into(), mime_type: "application/octet-stream".into(), data: (0..2500u32).map(|i| (i * 13) as u8).collect() };
+        let (mut em, init, sender_sas) = studio_sender(&file, "ABCDEFGHJKMN");
+        let mut rec = Receiver::new();
+        rec.process(&init).unwrap();
+        assert_ne!(rec.pair_with_passphrase("ABCD-EFGH-JKMP").unwrap(), sender_sas);
+        assert!(rec.confirm().unwrap().is_empty());
+        let mut wrong = false;
+        for _ in 0..crate::receiving::WRONG_CODE_REJECTIONS {
+            let events = rec.process(&em.next_frame().unwrap().unwrap()).unwrap();
+            wrong |= events.iter().any(|e| matches!(e, Event::WrongCode));
+        }
+        assert!(wrong, "the wrong code is detected");
+        assert!(rec.needs_code());
+        assert_eq!(rec.pair_with_passphrase("abcd-efgh-jkmn").unwrap(), sender_sas);
+        let mut received = None;
+        let mut events = rec.confirm().unwrap();
+        for _ in 0..100 {
+            if let Some(Event::File(f)) = events.iter().find(|e| matches!(e, Event::File(_))) {
+                received = Some(f.clone());
+                break;
+            }
+            events = rec.process(&em.next_frame().unwrap().unwrap()).unwrap();
+        }
+        assert_eq!(received.expect("file received"), file);
+        assert!(rec.accepted > 0);
+    }
+
+    /// Native sender → Studio-style receiver (live.ts: `scanInitCode`, refuses
+    /// a codes pairing, `pairWithPassphrase` of the normalized typed code,
+    /// SAS compared, then the frames): session level, no optics. The native
+    /// loop is the Studio's: init code, then a data frame.
+    #[test]
+    fn native_sender_to_studio_receiver() {
+        use orp_core::session::ReceiverSession;
+        let file = TransferredFile { name: "photo.bin".into(), mime_type: "application/octet-stream".into(), data: (0..9000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 11) as u8).collect() };
+        let code = crate::pairing::random_code();
+        let mut em = Sender::new(&file, SendSettings { codec: Codec::Color4, period_ms: DEFAULT_PERIOD_MS, columns: 1 }, &code).unwrap();
+        let mut rx = ReceiverSession::new(Box::new(CryptoRust::new()));
+        let (_, init_code) = crate::pairing::pairing_code(&em.init).unwrap();
+        let info = rx.show_init_code(&init_code).unwrap();
+        assert!(info.by_passphrase, "the Studio refuses a codes pairing");
+        // normalizedCode: upper case, only A-Z0-9.
+        let typed: String = crate::pairing::shown_code(&code).to_uppercase().chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+        rx.pair_by_passphrase(&typed).unwrap();
+        assert_eq!(rx.sas().unwrap(), em.sas);
+        rx.confirm_sas().unwrap();
+        for _ in 0..400 {
+            if rx.finished() {
+                break;
+            }
+            // The init frame is a service frame for an established session.
+            rx.receive_frame(&em.init).unwrap();
+            rx.receive_frame(&em.next_data_frame().unwrap()).unwrap();
+        }
+        assert!(rx.finished());
+        let r = rx.result().unwrap();
+        assert!(r.checked);
+        assert_eq!(crate::file::unpack(&r.data), file);
+    }
+
     /// Single grid: the 11th image is the repeated code, with the sending state.
     #[test]
     fn code_resume_with_state() {
         let file = TransferredFile { name: "e.bin".into(), mime_type: "application/octet-stream".into(), data: (0..20_000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect() };
-        let mut em = Sender::new(&file, SendSettings { codec: Codec::Color8, period_ms: 33, columns: 1 }).unwrap();
+        let mut em = Sender::new(&file, SendSettings { codec: Codec::Color8, period_ms: 33, columns: 1 }, "K7QFM2XP9CHR").unwrap();
         for _ in 0..10 {
             em.next_batch().unwrap();
         }

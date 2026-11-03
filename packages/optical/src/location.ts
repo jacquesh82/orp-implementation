@@ -16,11 +16,12 @@
 import {
   affineFromTriplet,
   chooseTriplet,
+  chooseTriplets,
   detectFinders,
   sample,
   type Affine,
 } from "./decoder.ts";
-import { FINDERS, GRID_SIZE } from "./grid.ts";
+import { FINDERS } from "./grid.ts";
 import type { ImageRGBA } from "./render.ts";
 
 /** 3×3 homography (row by row): module (x, y) → image pixel. */
@@ -126,36 +127,12 @@ export function locateAll(image: ImageRGBA, alignment?: readonly [number, number
   // a lot of true black (screen edge, background), Otsu settles between that
   // black and the rest and the dark gray finders of a mosaic fall on the
   // light side (measured: 4 to 8 finders out of 27 in 3×3, against ≈ 45 with
-  // the local one). Keep the threshold that finds the most grids — Otsu on a tie.
-  const globals = locateFromCandidates(image, detectFinders(image), alignment, maximum);
-  const locals = locateFromCandidates(image, detectFinders(image, { threshold: "local" }), alignment, maximum);
-  return locals.length > globals.length ? locals : globals;
-}
-
-function locateFromCandidates(
-  image: ImageRGBA,
-  candidates: ReturnType<typeof detectFinders>,
-  alignment: readonly [number, number] | undefined,
-  maximum: number,
-): Location[] {
-  let remaining = candidates;
-  const foundList: Location[] = [];
-  while (foundList.length < maximum) {
-    const triplet = chooseTriplet(remaining);
-    if (!triplet) break;
-    const loc = locateFromTriplet(image, triplet, alignment);
-    foundList.push(loc);
-    // Every finder INSIDE this grid is discarded, not only its three anchors:
-    // the colored data of a P subframe create false patterns, which must not
-    // become a ghost grid.
-    const { a, b, c, d, e, f } = loc.affine;
-    const det = a * d - b * c;
-    remaining = remaining.filter((k) => {
-      const mx = (d * (k.x - e) - c * (k.y - f)) / det;
-      const my = (a * (k.y - f) - b * (k.x - e)) / det;
-      return mx < -2 || my < -2 || mx > GRID_SIZE + 2 || my > GRID_SIZE + 2;
-    });
-  }
+  // the local one). Keep the threshold that finds the most grids — Otsu on a
+  // tie. Every triplet gives a location: the choice is made on the triplets,
+  // and only the retained ones are located (alignment search).
+  const globals = chooseTriplets(detectFinders(image), maximum);
+  const locals = chooseTriplets(detectFinders(image, { threshold: "local" }), maximum);
+  const foundList = (locals.length > globals.length ? locals : globals).map((triplet) => locateFromTriplet(image, triplet, alignment));
   if (foundList.length === 0) return foundList;
   const row = Math.min(...foundList.map((l) => l.pxPerModule)) * 20;
   return foundList.sort((a, b) => {
@@ -416,6 +393,16 @@ function findAlignment(
       return cellList;
     }),
   );
+  // Flat lattice offsets and expected values of the 9 × 25 cells.
+  const CELLS = 25;
+  const offsets = new Int32Array(templates.length * CELLS);
+  const expectedCells = new Uint8Array(templates.length * CELLS);
+  templates.forEach((cellList, t) =>
+    cellList.forEach(([di, dj, expected], m) => {
+      offsets[t * CELLS + m] = dj * side + di;
+      expectedCells[t * CELLS + m] = expected;
+    }),
+  );
   let best = -1;
   let positions: [number, number][] = [];
   for (let oj = -RANGE * STEP; oj <= RANGE * STEP; oj++) {
@@ -423,10 +410,17 @@ function findAlignment(
       const base = (HALF + oj) * side + HALF + oi;
       // Fast cut: the center must be black.
       if (black[base] !== 1) continue;
+      // Best template score. A template is abandoned as soon as it can no
+      // longer reach max(score, best): the score stays exact whenever it is
+      // ≥ best — the only case where it counts.
       let score = 0;
-      for (const cellList of templates) {
+      for (let t = 0; t < templates.length && score < CELLS; t++) {
+        const floor = Math.max(score, best);
         let s = 0;
-        for (const [di, dj, expected] of cellList) if (black[base + dj * side + di] === expected) s++;
+        for (let m = 0; m < CELLS; m++) {
+          if (black[base + offsets[t * CELLS + m]!] === expectedCells[t * CELLS + m]) s++;
+          else if (s + CELLS - 1 - m < floor) break;
+        }
         if (s > score) score = s;
       }
       if (score > best) {

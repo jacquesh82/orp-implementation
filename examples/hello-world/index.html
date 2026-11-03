@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OptiRelay — Hello world</title>
+  </head>
+  <body>
+    <main>
+      <h1>OptiRelay — Hello world</h1>
+      <p class="soft">
+        Open this page on two devices. One <b>sends</b> “Hello world” as an animated code on its screen; the other
+        <b>receives</b> it with its camera. No network between them: only light.
+      </p>
+
+      <div class="row" id="choice">
+        <button type="button" class="primary" id="send">Send “Hello world”</button>
+        <button type="button" id="receive">Receive</button>
+      </div>
+
+      <section class="card" id="sender" hidden>
+        <p class="status">Point the other device's camera at this code.</p>
+        <canvas class="grid" id="code" aria-label="Animated code carrying the message"></canvas>
+        <div class="row"><button type="button" id="stop">Stop</button></div>
+      </section>
+
+      <section class="card" id="receiver" hidden>
+        <video id="camera" playsinline muted></video>
+        <p class="status" id="reading" aria-live="polite">Aim at the sender's screen…</p>
+        <p class="message" id="message" hidden></p>
+      </section>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

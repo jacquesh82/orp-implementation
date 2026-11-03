@@ -4,10 +4,10 @@ The English marketing website and the ORP protocol guide share a Vite build, sel
 
 ## Pages
 
-- `/`: animated optical-transfer illustration, TM4/TM8 overview and access to the test bench, browser app and Android APK.
+- `/`: animated optical-transfer illustration, TM4/TM8 overview and access to OptiRelay Studio and to the Android APK.
 - `/protocol/`: English Web guide to temporal modulation, pairing, frame structure, error recovery and integrity. `/protocol` redirects to the trailing-slash URL.
 
-The `/lab/` bundle is built separately and assembled alongside the website by the root Dockerfile. The APK and its metadata come from `public/download/` (written by `apps/android-lab/rebuild.sh`; the former `/telecharger/` route redirects there).
+The `/studio/` bundle (OptiRelay Studio, `examples/studio`, built on the npm packages) is built separately and assembled alongside the website by the root Dockerfile; `/lab/` and `/app/` redirect to it. The APK and its metadata come from `public/download/` (written by `native/android/rebuild.sh`, the native Android app; the former `/telecharger/` route redirects there).
 
 ## Development and checks
 

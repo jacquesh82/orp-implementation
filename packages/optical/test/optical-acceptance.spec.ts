@@ -36,6 +36,7 @@ describe("end-to-end optical acceptance", () => {
     receiver.scanInitCode(sender.initCode());
     const response = await receiver.responseCode();
     await sender.receiveResponseCode(response);
+    await receiver.receiveRevealCode(sender.revealCode());
     expect(sender.sas()).toBe(receiver.sas());
     sender.confirmSas();
     receiver.confirmSas();
@@ -90,6 +91,7 @@ describe("end-to-end optical acceptance", () => {
     receiver.scanInitCode(sender.initCode());
     const response = await receiver.responseCode();
     await sender.receiveResponseCode(response);
+    await receiver.receiveRevealCode(sender.revealCode());
     sender.confirmSas();
     receiver.confirmSas();
 

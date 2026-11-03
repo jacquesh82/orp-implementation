@@ -1,6 +1,6 @@
 {
   "name": "@optirelay/optical",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "ORP optical codecs: MONO_2, COLOR_4, COLOR_8, grid, CIELAB calibration, encoder and decoder — no DOM.",
   "type": "module",
   "main": "./src/index.ts",
@@ -9,12 +9,46 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@optirelay/core": "workspace:*"
+    "@optirelay/core": "workspace:^"
   },
-  "keywords": ["optirelay", "orp", "qr", "color-codec", "cielab"],
+  "keywords": [
+    "optirelay",
+    "orp",
+    "qr",
+    "color-codec",
+    "cielab",
+    "optical-data-transfer",
+    "screen-to-camera",
+    "offline-file-transfer",
+    "air-gap"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lelabnet-creator/mindlog.optiRelay.git"
+    "url": "git+https://github.com/jacquesh82/orp-implementation.git",
+    "directory": "packages/optical"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "homepage": "https://orp.mindlog.today/",
+  "bugs": {
+    "url": "https://github.com/jacquesh82/orp-implementation/issues"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

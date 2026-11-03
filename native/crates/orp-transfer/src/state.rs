@@ -1,10 +1,10 @@
-//! SENDING STATE slipped into the init code frame: the code (129 bytes)
-//! leaves 63 free bytes in its 2-symbol payload. The bench (or the sending
+//! SENDING STATE slipped into the init code frame: the code (97 bytes in
+//! ORP v0.2) leaves 95 free bytes in its 2-symbol payload. The bench (or the sending
 //! app) writes there its sending counter, the symbols sent and its
 //! "to film" target; the phone, reading these states in the video, aligns
 //! its video on the SENDER'S TIME — the same clock on both sides.
 //!
-//! Format (after the 129 bytes of the code, big-endian):
+//! Format (after the 97 bytes of the code, big-endian):
 //!   "ET" · version (1) · flags · t (i32, ms since the start of the data,
 //!   negative during the countdown) · symbols sent (u32) · advised symbols
 //!   (u32). Older receivers ignore these bytes.
@@ -132,7 +132,7 @@ mod tests {
     fn state_matches_ts() {
         let code: Vec<u8> = (0..INIT_CODE_SIZE).map(|i| ((i * 7 + 3) & 0xff) as u8).collect();
         let state = SendingState { t_ms: 47_250, sent_symbols: 1234, advised_symbols: 9000 };
-        let ts = "4f520001020802004f520001020802004f520001020802000000000000000000000100000000030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e75455401000000b892000004d20000232800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000868b4ab270c321583d3675db";
+        let ts = "4f520002020802004f520002020802004f520002020802000000000000000000000100000000030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3455401000000b892000004d20000232800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f2ecd26f4fcd0c95002b71a7";
         let expected: Vec<u8> = (0..ts.len()).step_by(2).map(|i| u8::from_str_radix(&ts[i..i + 2], 16).unwrap()).collect();
         assert_eq!(pairing_frame_with_state(&code, Some(&state)).unwrap(), expected);
         assert_eq!(read_state(&expected), Some(state));

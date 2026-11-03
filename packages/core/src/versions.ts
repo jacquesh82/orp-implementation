@@ -16,8 +16,8 @@ export interface ProtocolVersion {
   minor: number;
 }
 
-/** Wire version described by docs/orp-protocol-v0.1.md. */
-export const PROTOCOL_VERSION: ProtocolVersion = { major: 0, minor: 1 };
+/** Wire version described by docs/orp-protocol-v0.2.md (v0.2: commit/reveal pairing, transcript-bound keys, PBKDF2 passphrase). */
+export const PROTOCOL_VERSION: ProtocolVersion = { major: 0, minor: 2 };
 
 export function compareVersions(a: ProtocolVersion, b: ProtocolVersion): number {
   return a.major !== b.major ? a.major - b.major : a.minor - b.minor;

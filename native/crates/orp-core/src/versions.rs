@@ -14,8 +14,9 @@ pub struct Version {
     pub minor: u8,
 }
 
-/// Wire version described by docs/orp-protocol-v0.1.md (VERSION_PROTCOLE).
-pub const PROTOCOL_VERSION: Version = Version { major: 0, minor: 1 };
+/// Wire version described by docs/orp-protocol-v0.2.md (VERSION_PROTCOLE) —
+/// v0.2: commit/reveal pairing, transcript-bound keys, PBKDF2 passphrase.
+pub const PROTOCOL_VERSION: Version = Version { major: 0, minor: 2 };
 
 /// Comparison: negative, zero or positive, like `comparerVersion`.
 pub fn compare_version(a: Version, b: Version) -> i32 {

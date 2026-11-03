@@ -31,11 +31,5 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/share_paths" />
         </provider>
-        <!-- Slow-motion filming (high-speed camera session), opened by the app. -->
-        <activity
-            android:name=".SlowMotionActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:theme="@style/AppTheme" />
     </application>
 </manifest>

@@ -1,0 +1,9 @@
+# Context of the `orp-site` image: the monorepo sources, nothing built and
+# nothing Android — except the APK published in apps/site/public/download.
+**/node_modules
+**/dist
+.git
+.zcode
+native
+packages/*/test
+docs

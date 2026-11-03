@@ -4,14 +4,18 @@
 # (stacks/orp.mindlog.today.web). A single image serves:
 #
 #   /                the showcase         (apps/site)
-#   /lab/            the test bench       (apps/lab)
-#   /app/            withdrawn: redirected to /lab/ (purge service worker)
+#   /studio/         OptiRelay Studio     (examples/studio — interactive demo
+#                                          built on the npm @optirelay/* packages;
+#                                          it replaces the bench)
+#   /lab/            withdrawn: redirected to /studio/
+#   /app/            withdrawn: redirected to /studio/ (purge service worker)
 #   /download/       the Android APK      (apps/site/public/download, written
-#                                          by apps/android-lab/rebuild.sh;
+#                                          by native/android/rebuild.sh;
 #                                          /telecharger/ redirects there)
 #
-# The context is the monorepo root: the bundles share the repository's
-# @optirelay/* packages.
+# The context is the monorepo root: the showcase uses the repository's
+# @optirelay/* packages; the Studio installs the PUBLISHED ones from npm (it is
+# the example of an application using them).
 
 # --- Build stage --------------------------------------------------------------
 FROM node:22-alpine AS build
@@ -24,21 +28,25 @@ COPY packages/core/package.json packages/core/
 COPY packages/optical/package.json packages/optical/
 COPY packages/browser/package.json packages/browser/
 COPY packages/elements/package.json packages/elements/
-# Manifest only: the lockfile declares this workspace project, it is not built.
+# Manifests only for web, lab and the Hello world examples: the lockfile
+# declares these workspace projects, they are not built.
 COPY apps/web/package.json apps/web/
 COPY apps/lab/package.json apps/lab/
 COPY apps/site/package.json apps/site/
+COPY examples/hello-world/package.json examples/hello-world/
+COPY examples/secure-hello-world/package.json examples/secure-hello-world/
+COPY examples/studio/package.json examples/studio/
 RUN pnpm install --frozen-lockfile \
-      --filter @optirelay/site... --filter @optirelay/lab...
+      --filter @optirelay/site... --filter @optirelay/example-studio...
 
 COPY packages packages
-COPY apps/lab apps/lab
 COPY apps/site apps/site
-RUN pnpm --filter @optirelay/lab build \
- && pnpm --filter @optirelay/site build \
+COPY examples/studio examples/studio
+RUN pnpm --filter @optirelay/site build \
+ && pnpm --filter @optirelay/example-studio build \
  && mkdir -p /out \
  && cp -r apps/site/dist/. /out/ \
- && cp -r apps/lab/dist /out/lab
+ && cp -r examples/studio/dist /out/studio
 
 # --- Runtime stage ------------------------------------------------------------
 FROM nginx:1.27-alpine AS runtime

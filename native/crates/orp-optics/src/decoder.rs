@@ -324,72 +324,278 @@ fn center_vertically(
 /// Three ordered marker centers: [TL, TR, BL].
 pub type Triplet = [[f64; 2]; 3];
 
-/// Chooses the L-shaped triplet (TL, TR, BL) closest to an isosceles right
-/// triangle at the scale of the markers.
-pub fn choose_triplet(candidates: &[MarkerCandidate]) -> Option<Triplet> {
-    let mut best_fit: Option<(Triplet, f64)> = None;
+/// Acceptance test of ONE triple, taken in index order (p0 < p1 < p2): the
+/// error (pythagorean + isosceles) and the ordered [TL, TR, BL] triplet, or
+/// None when the triple is not a plausible grid.
+fn evaluate_triple(p0: &MarkerCandidate, p1: &MarkerCandidate, p2: &MarkerCandidate) -> Option<(Triplet, f64)> {
+    let pts = [p0, p1, p2];
     let d = |p: &MarkerCandidate, q: &MarkerCandidate| js::hypot(p.x - q.x, p.y - q.y);
-    for i in 0..candidates.len() {
-        for j in i + 1..candidates.len() {
-            for k in j + 1..candidates.len() {
-                let pts = [&candidates[i], &candidates[j], &candidates[k]];
-                // A module smaller than 5 px cannot be decoded.
-                let side1 = js::hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-                let side2 = js::hypot(pts[0].x - pts[2].x, pts[0].y - pts[2].y);
-                if side1.min(side2) / 34.0 < 5.0 {
+    // A module smaller than 5 px cannot be decoded.
+    let side1 = js::hypot(p0.x - p1.x, p0.y - p1.y);
+    let side2 = js::hypot(p0.x - p2.x, p0.y - p2.y);
+    if side1.min(side2) / 34.0 < 5.0 {
+        return None;
+    }
+    // (length, opposite vertex), sorted by descending length (stable sort).
+    let mut sides = [(d(p1, p2), 0usize), (d(p0, p2), 1), (d(p0, p1), 2)];
+    js::sort(&mut sides, |a, b| b.0 - a.0);
+    let hypotenuse = sides[0].0;
+    let c1 = sides[1].0;
+    let c2 = sides[2].0;
+    let pythagoras_error =
+        (hypotenuse * hypotenuse - (c1 * c1 + c2 * c2)).abs() / (hypotenuse * hypotenuse);
+    let isosceles_error = (c1 - c2).abs() / c1.max(c2);
+    let error = pythagoras_error + isosceles_error;
+    if pythagoras_error > 0.15 || isosceles_error > 0.2 {
+        return None;
+    }
+    let opposite = sides[0].1;
+    let vertex = pts[opposite];
+    let mut others = (0..3).filter(|&idx| idx != opposite).map(|idx| pts[idx]);
+    let (p, q) = (others.next().unwrap(), others.next().unwrap());
+    // Scale consistency: module size of the triangle (side / 34) against the
+    // one the markers measure (horizontal pattern of 7 modules /
+    // max(|cos θ|, |sin θ|)) — otherwise the top-left markers of three
+    // NEIGHBORING grids of a mosaic form an equally perfect triangle.
+    let theta = (p.y - vertex.y).atan2(p.x - vertex.x);
+    let tilt = theta.cos().abs().max(theta.sin().abs());
+    let marker_module = ((p0.score + p1.score + p2.score) / 21.0) * tilt;
+    let module_triangle = (c1 + c2) / 2.0 / 34.0;
+    if (module_triangle / marker_module - 1.0).abs() > 0.18 {
+        return None;
+    }
+    // TL = vertex opposite the hypotenuse; TR / BL from the sign of the cross
+    // product (image frame, y pointing down).
+    let cross = (p.x - vertex.x) * (q.y - vertex.y) - (p.y - vertex.y) * (q.x - vertex.x);
+    let (tr, bl) = if cross > 0.0 { (p, q) } else { (q, p) };
+    Some(([[vertex.x, vertex.y], [tr.x, tr.y], [bl.x, bl.y]], error))
+}
+
+// Bounds of the plausible-triple enumeration, DERIVED from the acceptance
+// test (≥ 5 % margin, no accepted triple is ever missed — same constants as
+// the TS, see packages/optical/src/decoder.ts):
+// - the leg from the vertex to the LOWER-index other marker is ≥ 170 px
+//   (min-side test: the lowest index of the triple is the vertex or it);
+// - mean leg m ∈ [0.9, 1.125] × leg and m ∈ [0.82, 1.18] × 34 · tilt · S / 21
+//   (S: sum of the 3 scores, tilt ∈ [√2/2, 1]): a leg lies in [0.834 S, 2.123 S];
+// - |cos| of the right angle ≤ 0.181, legs ratio ∈ [0.8, 1.25]: the third
+//   marker lies within 0.337 × leg of the second one turned by ±90°.
+// These bounds only prune: the exact test alone decides.
+const MIN_LEG: f64 = 169.0;
+const LEG_PER_SCORE_MIN: f64 = 0.79;
+const LEG_PER_SCORE_MAX: f64 = 2.23;
+const THIRD_RADIUS: f64 = 0.36;
+const LEG_RATIO_MIN: f64 = 0.78;
+const LEG_RATIO_MAX: f64 = 1.28;
+const MAX_COS: f64 = 0.2;
+/// Mean leg / S: [0.82 · 34 · √2/2 / 21, 1.18 · 34 / 21] = [0.939, 1.910], ± 3 %.
+const MEAN_LEG_PER_SCORE_MIN: f64 = 0.91;
+const MEAN_LEG_PER_SCORE_MAX: f64 = 1.97;
+
+/// Calls `visit(i, j, k)` (i < j < k) for a SUPERSET of the triples that
+/// `evaluate_triple` accepts — instead of the n³/6 triples: each candidate as
+/// the right-angle vertex, each second marker at a compatible distance, the
+/// third one only searched in a disc around its predicted position (uniform
+/// grid of cells). A triple may be visited more than once.
+fn for_each_plausible_triple(c: &[MarkerCandidate], mut visit: impl FnMut(usize, usize, usize)) {
+    let n = c.len();
+    if n < 3 {
+        return;
+    }
+    let (mut min_score, mut max_score) = (f64::INFINITY, f64::NEG_INFINITY);
+    let (mut min_x, mut min_y) = (f64::INFINITY, f64::INFINITY);
+    let (mut max_x, mut max_y) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for k in c {
+        min_score = min_score.min(k.score);
+        max_score = max_score.max(k.score);
+        min_x = min_x.min(k.x);
+        min_y = min_y.min(k.y);
+        max_x = max_x.max(k.x);
+        max_y = max_y.max(k.y);
+    }
+    // Cells ≈ the search radius of a typical grid (leg ≈ 4.6 scores); inside
+    // a cell, candidates by decreasing score (then index).
+    let mut scores: Vec<f64> = c.iter().map(|k| k.score).collect();
+    scores.sort_by(f64::total_cmp);
+    let cell = 8f64.max(THIRD_RADIUS * 4.6 * scores[n >> 1]);
+    let columns = ((max_x - min_x) / cell).floor() as usize + 1;
+    let rows = ((max_y - min_y) / cell).floor() as usize + 1;
+    let cell_count = columns * rows;
+    let cell_of: Vec<usize> = c
+        .iter()
+        .map(|k| ((k.y - min_y) / cell).floor() as usize * columns + ((k.x - min_x) / cell).floor() as usize)
+        .collect();
+    let mut start = vec![0usize; cell_count + 1];
+    for &k in &cell_of {
+        start[k + 1] += 1;
+    }
+    for i in 0..cell_count {
+        start[i + 1] += start[i];
+    }
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&p, &q| c[q].score.total_cmp(&c[p].score).then(p.cmp(&q)));
+    let mut fill = start[..cell_count].to_vec();
+    let mut items = vec![0usize; n];
+    for &i in &order {
+        items[fill[cell_of[i]]] = i;
+        fill[cell_of[i]] += 1;
+    }
+    let cell_max: Vec<f64> = (0..cell_count)
+        .map(|i| if start[i + 1] > start[i] { c[items[start[i]]].score } else { f64::NEG_INFINITY })
+        .collect();
+
+    // Score window of the third marker, implied by the leg-ratio and scale
+    // tests below (1 % margin).
+    let third_min = (1.0 + LEG_RATIO_MIN) / 2.0 / MEAN_LEG_PER_SCORE_MAX * 0.99;
+    let third_max = (1.0 + LEG_RATIO_MAX) / 2.0 / MEAN_LEG_PER_SCORE_MIN * 1.01;
+    for v in 0..n {
+        let (vx, vy) = (c[v].x, c[v].y);
+        for p in 0..n {
+            if p == v {
+                continue;
+            }
+            let (dx, dy) = (c[p].x - vx, c[p].y - vy);
+            let leg2 = dx * dx + dy * dy;
+            if leg2 < MIN_LEG * MIN_LEG {
+                continue;
+            }
+            let pair = c[v].score + c[p].score;
+            let low = (pair + min_score) * LEG_PER_SCORE_MIN;
+            let high = (pair + max_score) * LEG_PER_SCORE_MAX;
+            if leg2 < low * low || leg2 > high * high {
+                continue;
+            }
+            let leg = leg2.sqrt();
+            let score_min = third_min * leg - pair;
+            let score_max = third_max * leg - pair;
+            let r = THIRD_RADIUS * leg;
+            for sign in [1.0, -1.0] {
+                // Second marker turned by ±90° around the vertex.
+                let (qx, qy) = (vx - sign * dy, vy + sign * dx);
+                let cx0 = ((qx - r - min_x) / cell).floor().max(0.0) as usize;
+                let cx1 = ((qx + r - min_x) / cell).floor().min(columns as f64 - 1.0);
+                let cy0 = ((qy - r - min_y) / cell).floor().max(0.0) as usize;
+                let cy1 = ((qy + r - min_y) / cell).floor().min(rows as f64 - 1.0);
+                if cx1 < 0.0 || cy1 < 0.0 {
                     continue;
                 }
-                // (length, opposite vertex), sorted by descending length (stable sort).
-                let mut sides = [
-                    (d(pts[1], pts[2]), 0usize),
-                    (d(pts[0], pts[2]), 1),
-                    (d(pts[0], pts[1]), 2),
-                ];
-                js::sort(&mut sides, |a, b| b.0 - a.0);
-                let hypotenuse = sides[0].0;
-                let c1 = sides[1].0;
-                let c2 = sides[2].0;
-                let pythagoras_error = (hypotenuse * hypotenuse - (c1 * c1 + c2 * c2)).abs()
-                    / (hypotenuse * hypotenuse);
-                let isosceles_error = (c1 - c2).abs() / c1.max(c2);
-                let error = pythagoras_error + isosceles_error;
-                if pythagoras_error > 0.15 || isosceles_error > 0.2 {
-                    continue;
-                }
-                let opposite = sides[0].1;
-                // Scale consistency: module size of the triangle (side / 34)
-                // against the one the markers measure (horizontal pattern of
-                // 7 modules / max(|cos θ|, |sin θ|)).
-                {
-                    let vertex = pts[opposite];
-                    let other = pts[(0..3).find(|&idx| idx != opposite).unwrap()];
-                    let theta = (other.y - vertex.y).atan2(other.x - vertex.x);
-                    let tilt = theta.cos().abs().max(theta.sin().abs());
-                    let marker_module =
-                        ((pts[0].score + pts[1].score + pts[2].score) / 21.0) * tilt;
-                    let module_triangle = (c1 + c2) / 2.0 / 34.0;
-                    if (module_triangle / marker_module - 1.0).abs() > 0.18 {
-                        continue;
+                let (cx1, cy1) = (cx1 as usize, cy1 as usize);
+                for cy in cy0..=cy1 {
+                    for cx in cx0..=cx1 {
+                        let idx = cy * columns + cx;
+                        if cell_max[idx] < score_min {
+                            continue;
+                        }
+                        for &q in &items[start[idx]..start[idx + 1]] {
+                            let sq = c[q].score;
+                            if sq < score_min {
+                                break;
+                            }
+                            if sq > score_max || q <= p || q == v {
+                                continue;
+                            }
+                            let (ex, ey) = (c[q].x - qx, c[q].y - qy);
+                            if ex * ex + ey * ey > r * r {
+                                continue;
+                            }
+                            // Cheap necessary tests before the exact one.
+                            let (fx, fy) = (c[q].x - vx, c[q].y - vy);
+                            let other = (fx * fx + fy * fy).sqrt();
+                            if other < LEG_RATIO_MIN * leg || other > LEG_RATIO_MAX * leg {
+                                continue;
+                            }
+                            if (dx * fx + dy * fy).abs() > MAX_COS * leg * other {
+                                continue;
+                            }
+                            let mean = (leg + other) / 2.0;
+                            let sum = pair + sq;
+                            if mean < MEAN_LEG_PER_SCORE_MIN * sum || mean > MEAN_LEG_PER_SCORE_MAX * sum {
+                                continue;
+                            }
+                            // Indices in increasing order: the test is evaluated
+                            // on the triple in candidate order.
+                            let lo = v.min(p).min(q);
+                            let hi = v.max(p).max(q);
+                            visit(lo, v + p + q - lo - hi, hi);
+                        }
                     }
-                }
-                if best_fit.is_none_or(|(_, e)| error < e) {
-                    // TL = vertex opposite the hypotenuse; TR / BL from the sign
-                    // of the cross product (image frame, y pointing down).
-                    let vertex = pts[opposite];
-                    let others: Vec<&MarkerCandidate> = (0..3)
-                        .filter(|&idx| idx != opposite)
-                        .map(|idx| pts[idx])
-                        .collect();
-                    let (p, q) = (others[0], others[1]);
-                    let cross =
-                        (p.x - vertex.x) * (q.y - vertex.y) - (p.y - vertex.y) * (q.x - vertex.x);
-                    let (tr, bl) = if cross > 0.0 { (p, q) } else { (q, p) };
-                    best_fit = Some(([[vertex.x, vertex.y], [tr.x, tr.y], [bl.x, bl.y]], error));
                 }
             }
         }
     }
-    best_fit.map(|(t, _)| t)
+}
+
+/// An accepted triple: candidate indices (i < j < k), error, ordered triplet.
+#[derive(Debug, Clone, Copy)]
+struct TripleFit {
+    ijk: [usize; 3],
+    error: f64,
+    triplet: Triplet,
+}
+
+/// Total order of the choice: smallest error, then first triple in (i, j, k)
+/// order — that of an exhaustive scan.
+fn before(a: &TripleFit, b: &TripleFit) -> std::cmp::Ordering {
+    a.error.total_cmp(&b.error).then(a.ijk.cmp(&b.ijk))
+}
+
+fn fit_of(c: &[MarkerCandidate], i: usize, j: usize, k: usize) -> Option<TripleFit> {
+    evaluate_triple(&c[i], &c[j], &c[k]).map(|(triplet, error)| TripleFit { ijk: [i, j, k], error, triplet })
+}
+
+/// Chooses the L-shaped triplet (TL, TR, BL) closest to an isosceles right
+/// triangle at the scale of the markers (first in candidate order on a tie).
+pub fn choose_triplet(candidates: &[MarkerCandidate]) -> Option<Triplet> {
+    let mut best: Option<TripleFit> = None;
+    for_each_plausible_triple(candidates, |i, j, k| {
+        if let Some(f) = fit_of(candidates, i, j, k) {
+            if best.is_none_or(|b| before(&f, &b).is_lt()) {
+                best = Some(f);
+            }
+        }
+    });
+    best.map(|f| f.triplet)
+}
+
+/// Every grid of a mosaic, one triangle after the other: the best triplet,
+/// then the best one among the candidates that remain once every marker
+/// INSIDE the grid found is discarded. Same result as `choose_triplet` called
+/// again on the remaining candidates, but the triples are enumerated and
+/// tested only ONCE: removing candidates changes neither the test of a triple
+/// nor the order of two triples.
+pub fn choose_triplets(candidates: &[MarkerCandidate], maximum: usize) -> Vec<Triplet> {
+    let mut fits: Vec<TripleFit> = Vec::new();
+    for_each_plausible_triple(candidates, |i, j, k| {
+        if let Some(f) = fit_of(candidates, i, j, k) {
+            fits.push(f);
+        }
+    });
+    fits.sort_by(before);
+    fits.dedup_by(|b, a| before(a, b).is_eq());
+    let mut alive = vec![true; candidates.len()];
+    let mut chosen: Vec<Triplet> = Vec::new();
+    let mut cursor = 0;
+    let n = GRID_SIZE as f64;
+    while chosen.len() < maximum {
+        while cursor < fits.len() && !fits[cursor].ijk.iter().all(|&i| alive[i]) {
+            cursor += 1;
+        }
+        if cursor == fits.len() {
+            break;
+        }
+        let triplet = fits[cursor].triplet;
+        chosen.push(triplet);
+        let Affine { a, b, c, d, e, f } = affine_from_triplet(triplet[0], triplet[1], triplet[2]);
+        let det = a * d - b * c;
+        for (k, live) in candidates.iter().zip(alive.iter_mut()) {
+            let mx = (d * (k.x - e) - c * (k.y - f)) / det;
+            let my = (a * (k.y - f) - b * (k.x - e)) / det;
+            if !(mx < -2.0 || my < -2.0 || mx > n + 2.0 || my > n + 2.0) {
+                *live = false;
+            }
+        }
+    }
+    chosen
 }
 
 // ── Affine transform and sampling ─────────────────────────────────────────

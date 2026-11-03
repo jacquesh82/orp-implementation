@@ -26,7 +26,8 @@ pub use encryption::{CryptoRust, CryptoProvider, EcdhPair};
 pub use fountain::{fountain_symbol, lt_neighbors, FountainDecoder};
 pub use session::{
     Encryption, BlockState, SessionState, SenderEvent, ReceiverEvent, EndReason, TransmissionOptions, ReceiveProgress,
-    Rejection, ReceiveResult, SenderSession, ReceiverSession, FrameStatus, PairingMode,
+    Rejection, ReceiveResult, SenderSession, ReceiverSession, FrameStatus, PairingMode, ReceptionOptions,
+    DEFAULT_MAX_FILE_SIZE,
 };
 pub use errors::OrpError;
 pub use rs::{correct_rs, rs_parity, RS_PARITY};

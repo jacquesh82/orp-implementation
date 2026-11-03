@@ -1,0 +1,36 @@
+# Dependencies and builds — regenerated, never versioned.
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Environments and secrets — never versioned.
+*.env
+!.env.example
+
+# Test and coverage outputs.
+coverage/
+
+# Local state of editors and of the system.
+.DS_Store
+*.log
+.dual-graph/
+
+# APK published on the showcase site: an output of rebuild.sh, not a source.
+apps/site/public/download/optirelay.apk
+apps/*/dist/
+
+# Native Rust (Slint) app: build outputs.
+native/target/
+native/android/app/src/main/jniLibs/
+native/android/app/build/
+native/android/build/
+native/android/.gradle/
+native/android/local.properties
+
+# npm packaging (scripts/build-packages.mjs): copies made at build time.
+packages/*/LICENSE
+packages/browser/examples/
+
+# agent tooling (local)
+.claude/
+.zcode/

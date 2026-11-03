@@ -11,6 +11,7 @@ async function framesNeeded(size: number, codec: Codec): Promise<{ frames: numbe
   await sender.prepare(file);
   receiver.scanInitCode(sender.initCode());
   await sender.receiveResponseCode(await receiver.responseCode());
+  await receiver.receiveRevealCode(sender.revealCode());
   sender.confirmSas();
   receiver.confirmSas();
   let frames = 0;

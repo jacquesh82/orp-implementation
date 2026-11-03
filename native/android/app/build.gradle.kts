@@ -1,7 +1,7 @@
 // Native OptiRelay application: the UI and the protocol are the Rust
 // library `liboptirelay.so` (native/optirelay, Slint), loaded by a
-// NativeActivity; Kotlin only keeps what the Java API alone offers
-// (slow-motion filming in a high-speed session, system bars).
+// NativeActivity; Kotlin only keeps what needs an activity callback or the
+// UI thread (camera permission, file picker, save/share, brightness).
 // The library is placed in src/main/jniLibs by ../rebuild.sh.
 plugins {
     alias(libs.plugins.android.application)
@@ -40,5 +40,4 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.activity)
 }

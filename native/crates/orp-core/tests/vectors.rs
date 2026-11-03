@@ -236,34 +236,61 @@ fn pairing_matches_ts() {
     let v = load("pairing.json");
     let c = CryptoRust::new();
     for i in v["initCodes"].as_array().unwrap() {
+        let commitment = commitment_of(&c, &hex(&i["sessionId"]), &hex(&i["senderPublicKey"]));
+        assert_eq!(commitment.to_vec(), hex(&i["commitment"]));
         let info = InitCodeInfo {
             session_id: hex(&i["sessionId"]),
-            sender_pub: hex(&i["senderPublicKey"]),
+            commitment: commitment.to_vec(),
             stream_size: count(&i["streamSize"]),
             stream_digest: hex(&i["streamDigest"]),
             block_count: count(&i["blockCount"]) as u32,
             k_total: count(&i["kTotal"]) as u32,
             compressed: i["compressed"].as_bool().unwrap(),
             by_passphrase: i["byPassphrase"].as_bool().unwrap(),
+            encrypted: i["encrypted"].as_bool().unwrap(),
         };
+        assert_eq!(expected_layout(info.stream_size), (info.block_count as u64, info.k_total as u64));
         let code = write_init_code(&info).unwrap();
         assert_eq!(code, hex(&i["code"]));
+        assert_eq!(pairing_code_kind(&code), Some(PairingCodeKind::Init));
         let decoded = read_init_code(&code).unwrap();
         assert_eq!(decoded.block_count as u64, count(&i["readBack"]["blockCount"]));
         assert_eq!(decoded.k_total as u64, count(&i["readBack"]["kTotal"]));
         assert_eq!(decoded.stream_size, count(&i["readBack"]["streamSize"]));
-        assert_eq!((decoded.compressed, decoded.by_passphrase), (info.compressed, info.by_passphrase));
+        assert_eq!(decoded, info);
+    }
+    for i in v["invalidCodes"].as_array().unwrap() {
+        let code = hex(&i["code"]);
+        let error = match i["kind"].as_str().unwrap() {
+            "init" => read_init_code(&code).unwrap_err(),
+            "response" => read_response_code(&code).unwrap_err(),
+            _ => read_reveal_code(&code).unwrap_err(),
+        };
+        assert_eq!(error.code(), i["error"].as_str().unwrap(), "{}", i["code"]);
     }
     for r in v["responseCodes"].as_array().unwrap() {
-        let code = write_response_code(&hex(&r["sessionId"]), &hex(&r["receiverPublicKey"]), count(&r["sasSeed"]) as u32)
-            .unwrap();
+        let code = write_response_code(&hex(&r["sessionId"]), &hex(&r["receiverPublicKey"])).unwrap();
         assert_eq!(code, hex(&r["code"]));
+        assert_eq!(pairing_code_kind(&code), Some(PairingCodeKind::Response));
         let decoded = read_response_code(&code).unwrap();
-        assert_eq!(decoded.sas_seed as u64, count(&r["sasSeed"]));
+        assert_eq!(decoded.session_id, hex(&r["sessionId"]));
         assert_eq!(decoded.receiver_pub, hex(&r["receiverPublicKey"]));
     }
+    for r in v["revealCodes"].as_array().unwrap() {
+        let code = write_reveal_code(&hex(&r["sessionId"]), &hex(&r["senderPublicKey"])).unwrap();
+        assert_eq!(code, hex(&r["code"]));
+        assert_eq!(pairing_code_kind(&code), Some(PairingCodeKind::Reveal));
+        let decoded = read_reveal_code(&code).unwrap();
+        assert_eq!(decoded.session_id, hex(&r["sessionId"]));
+        assert_eq!(decoded.sender_pub, hex(&r["senderPublicKey"]));
+    }
+    for t in v["transcripts"].as_array().unwrap() {
+        let (response, reveal) = (hex_opt(&t["response"]), hex_opt(&t["reveal"]));
+        let hash = transcript_hash(&c, &hex(&t["init"]), response.as_deref(), reveal.as_deref());
+        assert_eq!(hash.to_vec(), hex(&t["hash"]));
+    }
     for k in v["keys"].as_array().unwrap() {
-        let keys = derive_keys(&c, &hex(&k["secret"]), &hex(&k["sessionId"]), count(&k["sasSeed"]) as u32).unwrap();
+        let keys = derive_keys(&c, &hex(&k["secret"]), &hex(&k["transcript"])).unwrap();
         assert_eq!(keys.data_key, hex(&k["dataKey"]));
         assert_eq!(keys.nonce_key, hex(&k["nonceKey"]));
         assert_eq!(keys.sas, k["sas"].as_str().unwrap());
@@ -271,15 +298,16 @@ fn pairing_matches_ts() {
     for p in v["passphrases"].as_array().unwrap() {
         let passphrase = p["passphrase"].as_str().unwrap();
         let sid = hex(&p["sessionId"]);
+        let init = hex(&p["initCode"]);
+        assert_eq!(read_init_code(&init).unwrap().session_id, sid);
         match p["error"].as_str() {
             Some(code) => {
                 assert_eq!(derive_secret_from_passphrase(&c, passphrase, &sid).unwrap_err().code(), code);
-                assert_eq!(derive_keys_from_passphrase(&c, passphrase, &sid).unwrap_err().code(), code);
+                assert_eq!(derive_keys_from_passphrase(&c, passphrase, &init).unwrap_err().code(), code);
             }
             None => {
                 assert_eq!(derive_secret_from_passphrase(&c, passphrase, &sid).unwrap(), hex(&p["secret"]));
-                let keys = derive_keys_from_passphrase(&c, passphrase, &sid).unwrap();
-                assert_eq!(keys.sas_seed as u64, count(&p["sasSeed"]));
+                let keys = derive_keys_from_passphrase(&c, passphrase, &init).unwrap();
                 assert_eq!(keys.data_key, hex(&p["dataKey"]));
                 assert_eq!(keys.nonce_key, hex(&p["nonceKey"]));
                 assert_eq!(keys.sas, p["sas"].as_str().unwrap());
@@ -333,7 +361,12 @@ fn sessions_match_ts() {
             ..TransmissionOptions::default()
         };
         let mut sender = SenderSession::new(crypto(count(&s["senderSeed"])), options).unwrap();
-        let mut receiver = ReceiverSession::new(crypto(count(&s["receiverSeed"])));
+        // A sender in encryption "none" must be accepted explicitly (v0.2).
+        let reception = ReceptionOptions {
+            encryption: if s["encryption"] == "none" { Encryption::Optional } else { Encryption::Required },
+            ..ReceptionOptions::default()
+        };
+        let mut receiver = ReceiverSession::with_options(crypto(count(&s["receiverSeed"])), reception);
         sender.prepare(&file).unwrap();
         let init_code = sender.init_code().unwrap();
         // With compression, identity depends on zlib (see compression.rs): it
@@ -346,6 +379,9 @@ fn sessions_match_ts() {
             let response = receiver.response_code().unwrap();
             assert_eq!(response, hex(&s["responseCode"]), "{name}: diverging response code");
             sender.receive_response_code(&response).unwrap();
+            let reveal = sender.reveal_code().unwrap();
+            assert_eq!(reveal, hex(&s["revealCode"]), "{name}: diverging reveal code");
+            receiver.receive_reveal_code(&reveal).unwrap();
         } else {
             let passphrase = s["passphrase"].as_str().unwrap();
             receiver.pair_by_passphrase(passphrase).unwrap();

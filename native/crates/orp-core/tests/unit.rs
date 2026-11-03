@@ -256,63 +256,154 @@ fn symmetric_ecdh_aead_hkdf_hmac() {
     assert!(c.decrypt_aead(&key, &nonce, &encrypted, &tag, &[9, 9, 9]).is_err());
 
     let (secret, salt) = (c.random_bytes(32), c.random_bytes(16));
-    let x = c.derive_hkdf(&secret, &salt, "ORP v0.1 donnees", 32).unwrap();
-    assert_eq!(x, c.derive_hkdf(&secret, &salt, "ORP v0.1 donnees", 32).unwrap());
-    assert_ne!(x, c.derive_hkdf(&secret, &salt, "ORP v0.1 nonce", 32).unwrap());
+    let x = c.derive_hkdf(&secret, &salt, "ORP v0.2 donnees", 32).unwrap();
+    assert_eq!(x, c.derive_hkdf(&secret, &salt, "ORP v0.2 donnees", 32).unwrap());
+    assert_ne!(x, c.derive_hkdf(&secret, &salt, "ORP v0.2 nonce", 32).unwrap());
     assert_eq!(c.hmac_sha256(&key, &[1, 2, 3]), c.hmac_sha256(&key, &[1, 2, 3]));
     assert_ne!(c.random_bytes(16), c.random_bytes(16));
 }
 
+/// PBKDF2-HMAC-SHA-256 written by hand (no `pbkdf2` crate): RFC 7914 §11
+/// vectors, multi-block output included.
+#[test]
+fn pbkdf2_hmac_sha256_rfc7914() {
+    let c = CryptoRust::new();
+    let hex = |s: &str| (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect::<Vec<u8>>();
+    assert_eq!(
+        c.derive_pbkdf2(b"passwd", b"salt", 1, 64).unwrap(),
+        hex("55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc49ca9cccf179b645991664b39d77ef317c71b845b1e30bd509112041d3a19783")
+    );
+    assert_eq!(
+        c.derive_pbkdf2(b"Password", b"NaCl", 80_000, 64).unwrap(),
+        hex("4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56a1d425a1225833549adb841b51c9b3176a272bdebba1d078478f62b397f33c8d")
+    );
+    // Key longer than a SHA-256 block (hashed first), output truncated.
+    let long = [0x61u8; 100];
+    let a = c.derive_pbkdf2(&long, b"salt", 2, 20).unwrap();
+    assert_eq!(a.len(), 20);
+    assert_eq!(a, c.derive_pbkdf2(&c.sha256(&long), b"salt", 2, 20).unwrap());
+    assert!(c.derive_pbkdf2(b"x", b"salt", 0, 32).is_err());
+}
+
 // ── pairing.spec.ts ───────────────────────────────────────────────────────
+
+fn init_info(c: &mut CryptoRust, stream_size: u64) -> InitCodeInfo {
+    let (block_count, k_total) = expected_layout(stream_size);
+    InitCodeInfo {
+        session_id: c.random_bytes(16),
+        commitment: c.random_bytes(32),
+        stream_size,
+        stream_digest: c.random_bytes(32),
+        block_count: block_count as u32,
+        k_total: k_total as u32,
+        compressed: true,
+        by_passphrase: false,
+        encrypted: true,
+    }
+}
 
 #[test]
 fn pairing_codes_round_trip_and_sizes() {
     let mut c = CryptoRust::new();
     let mut pub_ = c.random_bytes(65);
     pub_[0] = 0x04;
-    let info = InitCodeInfo {
-        session_id: c.random_bytes(16),
-        sender_pub: pub_.clone(),
-        stream_size: 123_456,
-        stream_digest: c.random_bytes(32),
-        block_count: 2,
-        k_total: 1500,
-        compressed: true,
-        by_passphrase: false,
-    };
-    assert_eq!(read_init_code(&write_init_code(&info).unwrap()).unwrap(), info);
-    let rep = read_response_code(&write_response_code(&info.session_id, &pub_, 424_242).unwrap()).unwrap();
-    assert_eq!((rep.receiver_pub, rep.sas_seed), (pub_, 424_242));
+    let info = init_info(&mut c, 123_456);
+    assert_eq!((info.block_count, info.k_total), (2, 1286));
+    let init = write_init_code(&info).unwrap();
+    assert_eq!((init.len(), init[0], init[1]), (INIT_CODE_SIZE, 0x49, 0x02));
+    assert_eq!(INIT_CODE_SIZE, 97);
+    assert_eq!(read_init_code(&init).unwrap(), info);
+    let response = write_response_code(&info.session_id, &pub_).unwrap();
+    assert_eq!((response.len(), response[0], response[1]), (RESPONSE_CODE_SIZE, 0x52, 0x02));
+    assert_eq!(read_response_code(&response).unwrap(), ResponseCode { session_id: info.session_id.clone(), receiver_pub: pub_.clone() });
+    let reveal = write_reveal_code(&info.session_id, &pub_).unwrap();
+    assert_eq!((reveal.len(), reveal[0], reveal[1]), (REVEAL_CODE_SIZE, 0x56, 0x02));
+    assert_eq!(read_reveal_code(&reveal).unwrap(), RevealCode { session_id: info.session_id.clone(), sender_pub: pub_.clone() });
+    assert_eq!(
+        [&init, &response, &reveal, &vec![0x00]].map(|o| pairing_code_kind(o)),
+        [Some(PairingCodeKind::Init), Some(PairingCodeKind::Response), Some(PairingCodeKind::Reveal), None]
+    );
+    // A code of another kind is refused even at the right size.
+    assert!(matches!(read_reveal_code(&response), Err(OrpError::InvalidPairingCode(_))));
+    assert!(matches!(read_response_code(&reveal), Err(OrpError::InvalidPairingCode(_))));
     assert!(matches!(read_init_code(&[0; 10]), Err(OrpError::InvalidPairingCode(_))));
     assert!(matches!(read_response_code(&[0; 10]), Err(OrpError::InvalidPairingCode(_))));
     assert_eq!(token_of(&[1, 2, 3, 4, 0xff]), 0x0102_0304);
-    for compressed in [false, true] {
-        for by_passphrase in [false, true] {
-            let i = InitCodeInfo { compressed, by_passphrase, ..info.clone() };
-            let decoded = read_init_code(&write_init_code(&i).unwrap()).unwrap();
-            assert_eq!((decoded.compressed, decoded.by_passphrase), (compressed, by_passphrase));
-        }
+    for flags in 0..8u8 {
+        let i = InitCodeInfo { compressed: flags & 1 != 0, by_passphrase: flags & 2 != 0, encrypted: flags & 4 != 0, ..info.clone() };
+        let code = write_init_code(&i).unwrap();
+        assert_eq!(code[96], flags);
+        assert_eq!(read_init_code(&code).unwrap(), i);
     }
+}
+
+#[test]
+fn pairing_codes_refused() {
+    let mut c = CryptoRust::new();
+    let info = init_info(&mut c, 5000);
+    let code = write_init_code(&info).unwrap();
+    let altered = |f: &dyn Fn(&mut Vec<u8>)| {
+        let mut o = code.clone();
+        f(&mut o);
+        read_init_code(&o).map(|_| ()).unwrap_err().code().to_string()
+    };
+    assert_eq!(altered(&|o| o[1] = 0x01), "version-incompatible", "a v0.1 code is never decoded");
+    assert_eq!(altered(&|o| o[96] |= 0x08), "code-appairage-invalide", "unknown flag");
+    assert_eq!(altered(&|o| o[95] ^= 1), "code-appairage-invalide", "kTotal ≠ size");
+    assert_eq!(altered(&|o| o[91] ^= 2), "code-appairage-invalide", "blockCount ≠ size");
+    assert_eq!(altered(&|o| o[50] = 0x01), "code-appairage-invalide", "size > 2⁵³ − 1");
+    assert_eq!(altered(&|o| o.truncate(96)), "code-appairage-invalide");
+    // The writer refuses an inconsistent layout too (no silent truncation).
+    assert!(write_init_code(&InitCodeInfo { k_total: info.k_total + 1, ..info.clone() }).is_err());
+    let huge = 65_536 * 1024 * 96;
+    let (blocks, k_total) = expected_layout(huge);
+    assert!(write_init_code(&InitCodeInfo { stream_size: huge, block_count: blocks as u32, k_total: k_total as u32, ..info.clone() }).is_err());
+    // Largest layout: 65 535 blocks, kTotal on 32 bits.
+    let max = 65_535 * 1024 * 96;
+    let (blocks, k_total) = expected_layout(max);
+    let i = InitCodeInfo { stream_size: max, block_count: blocks as u32, k_total: k_total as u32, ..info };
+    assert_eq!(read_init_code(&write_init_code(&i).unwrap()).unwrap().k_total, 65_535 * 1024);
+}
+
+#[test]
+fn expected_k_per_block() {
+    assert_eq!(expected_layout(0), (0, 0));
+    assert_eq!(expected_layout(1), (1, 1));
+    assert_eq!(expected_layout(100_000), (2, 1042));
+    assert_eq!((expected_k(100_000, 0), expected_k(100_000, 1), expected_k(100_000, 2)), (1024, 18, 0));
+    assert_eq!(expected_k(0, 0), 0);
+    assert_eq!(expected_k(96 * 1024, 0), 1024);
+    assert_eq!(expected_k(96 * 1024, 1), 0);
 }
 
 #[test]
 fn key_sas_and_nonce_derivation() {
     let mut c = CryptoRust::new();
-    let (secret, sid) = (c.random_bytes(32), c.random_bytes(16));
-    let a = derive_keys(&c, &secret, &sid, 777).unwrap();
-    let b = derive_keys(&c, &secret, &sid, 777).unwrap();
+    let (secret, transcript) = (c.random_bytes(32), c.random_bytes(32));
+    let a = derive_keys(&c, &secret, &transcript).unwrap();
+    let b = derive_keys(&c, &secret, &transcript).unwrap();
     assert!(a.sas.len() == 6 && a.sas.bytes().all(|o| o.is_ascii_digit()));
-    assert_eq!((&a.sas, &a.data_key), (&b.sas, &b.data_key));
-    let other = derive_keys(&c, &secret, &sid, 778).unwrap();
-    assert_ne!(other.sas, a.sas);
-    assert_eq!(other.data_key, a.data_key);
-    assert!(derive_secret_from_passphrase(&c, "mont-blanc-2026", &sid).is_ok());
+    assert_eq!((&a.sas, &a.data_key, &a.nonce_key), (&b.sas, &b.data_key, &b.nonce_key));
+    // Another transcript: everything changes, keys included.
+    let mut other_transcript = transcript.clone();
+    other_transcript[0] ^= 1;
+    let other = derive_keys(&c, &secret, &other_transcript).unwrap();
+    assert_ne!(other.data_key, a.data_key);
+    assert_ne!(other.nonce_key, a.nonce_key);
+    let sid = c.random_bytes(16);
+    let s1 = derive_secret_from_passphrase(&c, "mont-blanc-2026", &sid).unwrap();
+    assert_eq!(s1.len(), 32);
+    let other_sid = c.random_bytes(16);
+    assert_ne!(s1, derive_secret_from_passphrase(&c, "mont-blanc-2026", &other_sid).unwrap());
     assert!(matches!(derive_secret_from_passphrase(&c, "court", &sid), Err(OrpError::InvalidPairingCode(_))));
     let key = c.random_bytes(32);
     let n = frame_nonce(&c, &key, 3, 42);
     assert_eq!(n, frame_nonce(&c, &key, 3, 42));
     assert_ne!(n, frame_nonce(&c, &key, 3, 43));
     assert_ne!(n, frame_nonce(&c, &key, 4, 42));
+    assert!(constant_time_eq(&[1, 2, 3], &[1, 2, 3]));
+    assert!(!constant_time_eq(&[1, 2, 3], &[1, 2, 4]));
+    assert!(!constant_time_eq(&[1, 2, 3], &[1, 2]));
 }
 
 // ── session.spec.ts ───────────────────────────────────────────────────────
@@ -327,11 +418,18 @@ fn options(f: impl FnOnce(&mut TransmissionOptions)) -> TransmissionOptions {
     o
 }
 
-/// Pairs two sessions through the strong mode.
+/// A receiver that accepts a sender in encryption "none" (v0.2: explicit).
+fn receiver_accepting_clear() -> ReceiverSession {
+    ReceiverSession::with_options(crypto(), ReceptionOptions { encryption: Encryption::Optional, ..ReceptionOptions::default() })
+}
+
+/// Pairs two sessions through the strong mode: init → response → reveal.
 fn pair(e: &mut SenderSession, r: &mut ReceiverSession) {
     r.show_init_code(&e.init_code().unwrap()).unwrap();
     let response = r.response_code().unwrap();
+    assert!(matches!(r.sas(), Err(OrpError::InvalidState { .. })), "no SAS before the reveal code");
     e.receive_response_code(&response).unwrap();
+    r.receive_reveal_code(&e.reveal_code().unwrap()).unwrap();
     assert_eq!(e.sas().unwrap(), r.sas().unwrap());
     e.confirm_sas().unwrap();
     r.confirm_sas().unwrap();
@@ -393,10 +491,11 @@ fn session_by_passphrase_without_encryption_or_compression() {
         options(|o| {
             o.encryption = Encryption::Disabled;
             o.compression = false;
+            o.pairing = PairingMode::Passphrase;
         }),
     )
     .unwrap();
-    let mut r = ReceiverSession::new(crypto());
+    let mut r = receiver_accepting_clear();
     e.prepare(message).unwrap();
     r.show_init_code(&e.init_code().unwrap()).unwrap();
     r.pair_by_passphrase("shared-pairing-passphrase").unwrap();
@@ -504,7 +603,7 @@ fn session_incompatible_major_version() {
         }),
     )
     .unwrap();
-    let mut r = ReceiverSession::new(crypto());
+    let mut r = receiver_accepting_clear();
     e.prepare(&[0; 4000]).unwrap();
     pair(&mut e, &mut r);
     let buffer = single_pass(&mut e);
@@ -572,19 +671,182 @@ fn session_pause_resume_cancel() {
 #[test]
 fn session_empty_stream_finishes() {
     let mut e = SenderSession::new(crypto(), options(|o| o.encryption = Encryption::Disabled)).unwrap();
-    let mut r = ReceiverSession::new(crypto());
+    let mut r = receiver_accepting_clear();
     e.prepare(&[]).unwrap();
     pair(&mut e, &mut r);
     assert!(single_pass(&mut e).is_empty());
     e = SenderSession::new(crypto(), options(|o| o.encryption = Encryption::Disabled)).unwrap();
     e.prepare(&[]).unwrap();
-    r = ReceiverSession::new(crypto());
+    r = receiver_accepting_clear();
     pair(&mut e, &mut r);
     e.start(0).unwrap();
     assert_eq!(e.next_frame().unwrap(), None, "passes = 0 on an empty stream: no endless loop");
     // Zero announced blocks: the receiver is complete from the start (but, as
     // in TS, `result` requires having seen the transmission go by).
     assert!(r.finished());
+}
+
+// ── security.spec.ts (ORP v0.2) ───────────────────────────────────────────
+
+/// Encrypted session paired by codes, one pass of 2 sent.
+fn paired(file: &[u8]) -> (SenderSession, ReceiverSession, Vec<Vec<u8>>) {
+    let mut e = SenderSession::new(crypto(), options(|o| o.compression = false)).unwrap();
+    let mut r = ReceiverSession::new(crypto());
+    e.prepare(file).unwrap();
+    pair(&mut e, &mut r);
+    let mut frames = Vec::new();
+    e.send_all(2, |_, t| {
+        frames.push(t);
+        Ok(())
+    })
+    .unwrap();
+    (e, r, frames)
+}
+
+/// A clear frame of the session: the token is readable on the wire, nothing else is needed.
+fn clear_frame(token: u32, block: u32, k: u16, seed: u32) -> Vec<u8> {
+    build_frame(
+        &FrameHeader { version: FRAME_VERSION, codec: Codec::Color8, flags: 0, token, block, k, symbol_count: 1, seed },
+        &[0x41; 96],
+        None,
+    )
+    .unwrap()
+}
+
+#[test]
+fn clear_frame_in_encrypted_session_is_forged() {
+    let file: Vec<u8> = (0..500).map(|i| i as u8).collect();
+    let (e, mut r, frames) = paired(&file);
+    let k = 500usize.div_ceil(96) as u16;
+    assert_eq!(r.receive_frame(&clear_frame(e.token(), 0, k, 1)).unwrap(), FrameStatus::Rejected(Rejection::Forged));
+    for t in &frames {
+        r.receive_frame(t).unwrap();
+    }
+    assert_eq!(r.result().unwrap().data, file);
+    assert_eq!(r.progress().forged, 1);
+}
+
+#[test]
+fn frame_outside_layout_is_invalid_before_decoding() {
+    let (e, mut r, frames) = paired(&[0; 500]);
+    assert_eq!(r.receive_frame(&clear_frame(e.token(), 123_456, 6, 1)).unwrap(), FrameStatus::Rejected(Rejection::Invalid));
+    assert_eq!(r.receive_frame(&clear_frame(e.token(), 0, 999, 1)).unwrap(), FrameStatus::Rejected(Rejection::Invalid));
+    assert_eq!(r.progress().received_symbols, 0);
+    assert!(r.blocks().iter().all(|b| b.k == 6));
+    // Encrypted frame whose header was rewritten to another K.
+    let original = read_frame(&frames[0]).unwrap();
+    let forged = build_frame(&FrameHeader { k: original.header.k + 1, ..original.header }, &original.payload, original.tag.as_deref()).unwrap();
+    assert_eq!(r.receive_frame(&forged).unwrap(), FrameStatus::Rejected(Rejection::Invalid));
+}
+
+#[test]
+fn receiver_refuses_clear_sender_unless_accepted() {
+    let mut e = SenderSession::new(crypto(), options(|o| {
+        o.encryption = Encryption::Disabled;
+        o.pairing = PairingMode::Passphrase;
+    }))
+    .unwrap();
+    e.prepare(&[0; 10]).unwrap();
+    let init = e.init_code().unwrap();
+    assert!(matches!(ReceiverSession::new(crypto()).show_init_code(&init), Err(OrpError::InvalidPairingCode(_))));
+    assert!(!receiver_accepting_clear().show_init_code(&init).unwrap().encrypted);
+}
+
+#[test]
+fn altered_init_code_gives_diverging_sas() {
+    let mut e = SenderSession::new(crypto(), TransmissionOptions::default()).unwrap();
+    e.prepare(&[7; 1000]).unwrap();
+    let mut altered = e.init_code().unwrap();
+    altered[60] ^= 0xff; // stream digest
+    let mut r = ReceiverSession::new(crypto());
+    r.show_init_code(&altered).unwrap();
+    e.receive_response_code(&r.response_code().unwrap()).unwrap();
+    r.receive_reveal_code(&e.reveal_code().unwrap()).unwrap();
+    assert_ne!(r.sas().unwrap(), e.sas().unwrap());
+}
+
+#[test]
+fn man_in_the_middle_cannot_reveal_another_key() {
+    let mut e = SenderSession::new(crypto(), TransmissionOptions::default()).unwrap();
+    e.prepare(&[0; 100]).unwrap();
+    assert!(matches!(e.reveal_code(), Err(OrpError::PairingRequired(_))), "no reveal code before the response");
+    let mut r = ReceiverSession::new(crypto());
+    let info = r.show_init_code(&e.init_code().unwrap()).unwrap();
+    assert!(matches!(r.receive_reveal_code(&[0; REVEAL_CODE_SIZE]), Err(OrpError::PairingRequired(_))));
+    let response = r.response_code().unwrap();
+    assert_eq!(r.response_code().unwrap(), response, "same response code on every call");
+    // The attacker relays the real init code, then reveals ITS key.
+    let attacker = CryptoRust::new().generate_ecdh_pair().unwrap();
+    let forged = write_reveal_code(&info.session_id, &attacker.public_key).unwrap();
+    assert!(matches!(r.receive_reveal_code(&forged), Err(OrpError::InvalidPairingCode(_))));
+    assert_eq!(r.state(), SessionState::Pairing);
+    // The real reveal code still goes through.
+    e.receive_response_code(&response).unwrap();
+    r.receive_reveal_code(&e.reveal_code().unwrap()).unwrap();
+    assert_eq!(r.sas().unwrap(), e.sas().unwrap());
+}
+
+#[test]
+fn pairing_mode_must_match_the_init_code() {
+    let mut e = SenderSession::new(crypto(), TransmissionOptions::default()).unwrap();
+    e.prepare(&[0; 100]).unwrap();
+    assert!(matches!(e.receive_passphrase("shared test passphrase"), Err(OrpError::InvalidState { .. })));
+    let mut r = ReceiverSession::new(crypto());
+    r.show_init_code(&e.init_code().unwrap()).unwrap();
+    assert!(matches!(r.pair_by_passphrase("shared test passphrase"), Err(OrpError::InvalidState { .. })));
+
+    let mut e = SenderSession::new(crypto(), options(|o| o.pairing = PairingMode::Passphrase)).unwrap();
+    e.prepare(&[0; 100]).unwrap();
+    let mut r = ReceiverSession::new(crypto());
+    r.show_init_code(&e.init_code().unwrap()).unwrap();
+    assert!(matches!(r.response_code(), Err(OrpError::InvalidState { .. })));
+    let mut other = ReceiverSession::new(crypto());
+    let mut codes = SenderSession::new(crypto(), TransmissionOptions::default()).unwrap();
+    codes.prepare(&[0; 100]).unwrap();
+    other.show_init_code(&codes.init_code().unwrap()).unwrap();
+    assert!(matches!(e.receive_response_code(&other.response_code().unwrap()), Err(OrpError::InvalidState { .. })));
+    // Different passphrases: different SAS.
+    e.receive_passphrase("shared test passphrase").unwrap();
+    r.pair_by_passphrase("another test passphrase").unwrap();
+    assert_ne!(r.sas().unwrap(), e.sas().unwrap());
+}
+
+#[test]
+fn finished_state_survives_late_frames() {
+    let file = vec![3u8; 700];
+    let (_, mut r, frames) = paired(&file);
+    for t in &frames {
+        r.receive_frame(t).unwrap();
+    }
+    assert_eq!(r.result().unwrap().data, file);
+    assert_eq!(r.state(), SessionState::Finished);
+    r.receive_frame(&frames[0]).unwrap();
+    assert_eq!(r.state(), SessionState::Finished, "a late frame does not reopen the transmission");
+}
+
+#[test]
+fn deflate_bomb_stopped_at_the_bound() {
+    use orp_core::compression::{compress, decompress, decompress_bounded};
+    let bomb = compress(&vec![0; 4 * 1024 * 1024]).unwrap();
+    assert_eq!(decompress_bounded(&bomb, 1024 * 1024).unwrap_err().code(), "taille-excessive");
+    assert_eq!(decompress_bounded(&bomb, 4 * 1024 * 1024).unwrap().len(), 4 * 1024 * 1024);
+    assert_eq!(decompress(&bomb).unwrap().len(), 4 * 1024 * 1024);
+    assert!(decompress(&[0xff, 0xff, 0xff, 0xff]).is_err());
+    // Through a session: the receiver bound applies to the delivered file.
+    let file = vec![0u8; 200_000];
+    let mut e = SenderSession::new(crypto(), TransmissionOptions::default()).unwrap();
+    let mut r = ReceiverSession::with_options(crypto(), ReceptionOptions { max_file_size: 100_000, ..ReceptionOptions::default() });
+    e.prepare(&file).unwrap();
+    pair(&mut e, &mut r);
+    e.send_all(0, |em, t| {
+        r.receive_frame(&t)?;
+        if r.finished() {
+            em.finish();
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(r.result().unwrap_err().code(), "taille-excessive");
 }
 
 // ── efficiency.spec.ts ────────────────────────────────────────────────────

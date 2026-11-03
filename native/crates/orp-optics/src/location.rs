@@ -6,10 +6,10 @@
 //! is found, the homography degenerates into the affine.
 
 use crate::decoder::{
-    affine_from_triplet, choose_triplet, detect_markers, sample, Affine,
+    affine_from_triplet, choose_triplet, choose_triplets, detect_markers, sample, Affine,
     MarkerCandidate, DetectionThreshold, Triplet,
 };
-use crate::grid::{MARKERS, GRID_SIZE};
+use crate::grid::MARKERS;
 use crate::js;
 use crate::render::ImageRGBA;
 
@@ -133,40 +133,17 @@ pub fn locate_all(
     // black and the rest, and the dark-gray markers of a mosaic fall on the
     // light side. The threshold that finds the most grids is kept — Otsu on a
     // tie (same rule as the TS).
-    let global = locate_from_candidates(image, detect_markers(image, DetectionThreshold::Otsu), alignment, maximum);
-    let locales = locate_from_candidates(image, detect_markers(image, DetectionThreshold::Local), alignment, maximum);
-    if locales.len() > global.len() {
-        locales
-    } else {
-        global
-    }
-}
-
-fn locate_from_candidates(
-    image: &ImageRGBA,
-    candidates: Vec<MarkerCandidate>,
-    alignment: Option<[usize; 2]>,
-    maximum: usize,
-) -> Vec<Location> {
-    let mut remaining = candidates;
-    let mut found: Vec<Location> = Vec::new();
-    while found.len() < maximum {
-        let Some(triplet) = choose_triplet(&remaining) else {
-            break;
-        };
-        let loc = locate_from_triplet(image, &triplet, alignment);
-        // All the markers INSIDE this grid are discarded, not only its three
-        // finders.
-        let Affine { a, b, c, d, e, f } = loc.affine;
-        let det = a * d - b * c;
-        let n = GRID_SIZE as f64;
-        remaining.retain(|k| {
-            let mx = (d * (k.x - e) - c * (k.y - f)) / det;
-            let my = (a * (k.y - f) - b * (k.x - e)) / det;
-            mx < -2.0 || my < -2.0 || mx > n + 2.0 || my > n + 2.0
-        });
-        found.push(loc);
-    }
+    // Every triplet gives a location: the choice is made on the triplets, and
+    // only the retained ones are located (alignment search).
+    let global = choose_triplets(&detect_markers(image, DetectionThreshold::Otsu), maximum);
+    let locales = choose_triplets(&detect_markers(image, DetectionThreshold::Local), maximum);
+    let chosen = if locales.len() > global.len() { locales } else { global };
+    // Triangles chosen one by one, every marker INSIDE a found grid discarded
+    // before looking for the next one (decoder::choose_triplets).
+    let mut found: Vec<Location> = chosen
+        .iter()
+        .map(|triplet| locate_from_triplet(image, triplet, alignment))
+        .collect();
     if found.is_empty() {
         return found;
     }
@@ -507,12 +484,21 @@ fn find_alignment(
             if black[base as usize] != 1 {
                 continue;
             }
+            // Best template score. A template is abandoned as soon as it can
+            // no longer reach max(score, best): the score stays exact whenever
+            // it is ≥ best — the only case where it counts.
             let mut score = 0;
             for cells in &templates {
+                if score == 25 {
+                    break;
+                }
+                let floor = score.max(best);
                 let mut s = 0;
-                for &(offset, expected) in cells {
+                for (m, &(offset, expected)) in cells.iter().enumerate() {
                     if black[(base + offset) as usize] == expected {
                         s += 1;
+                    } else if s + 24 - (m as i32) < floor {
+                        break;
                     }
                 }
                 if s > score {

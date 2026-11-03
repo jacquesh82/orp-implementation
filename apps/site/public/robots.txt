@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+# The APK and the purge service worker of the former PWA are not pages.
+Disallow: /download/
+Disallow: /app/
+
+Sitemap: https://orp.mindlog.today/sitemap.xml

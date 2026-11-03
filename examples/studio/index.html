@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#010101" />
+    <title>OptiRelay Studio — Try screen-to-camera file transfer in your browser</title>
+    <meta name="description" content="Interactive demo of OptiRelay (ORP v0.2): send a file from a screen to a camera in your browser and look inside a frame. No network." />
+    <link rel="canonical" href="https://orp.mindlog.today/studio/" />
+    <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OptiRelay" />
+    <meta property="og:url" content="https://orp.mindlog.today/studio/" />
+    <meta property="og:title" content="OptiRelay Studio — Try screen-to-camera file transfer" />
+    <meta property="og:description" content="Send a file from a screen to a camera in your browser, inspect the optical channel and the anatomy of a frame. No network." />
+    <meta property="og:image" content="https://orp.mindlog.today/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="OptiRelay: screen-to-camera file transfer, with an optical data matrix" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "OptiRelay Studio",
+      "url": "https://orp.mindlog.today/studio/",
+      "description": "Interactive demo of OptiRelay: send a file from a screen to a camera in your browser, with no network.",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Any (web browser with a camera)",
+      "browserRequirements": "Requires JavaScript, WebCrypto and camera access over HTTPS",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+      "isPartOf": { "@type": "WebSite", "name": "OptiRelay", "url": "https://orp.mindlog.today/" }
+    }
+    </script>
+    <link rel="preload" href="./src/assets/aspekta-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="icon" href="./favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="on-showcase">
+    <!-- Site menu (served by the showcase under /studio/): the same as on the home page.
+         Shown by default, so the first paint already has it (no layout shift);
+         main.ts removes it when the Studio runs elsewhere. -->
+    <header class="site-nav" id="site-nav">
+      <nav class="site-nav-inner" aria-label="Site navigation">
+        <a class="site-brand" href="../" aria-label="OptiRelay, home">
+          <svg viewBox="0 0 28 28" aria-hidden="true"><path d="M1 1h10v10H1zM17 1h10v10H17zM1 17h10v10H1z"/><path class="site-dot" d="M18 18h8v8h-8z"/><path d="M5 5h2v2H5zM21 5h2v2h-2zM5 21h2v2H5z"/></svg>
+          <span>OptiRelay</span>
+        </a>
+        <div class="site-links">
+          <a class="site-link" href="../#principle">How it works</a>
+          <a class="site-link" href="../protocol/">Protocol</a>
+          <details class="nav-menu"><summary class="site-link">GitHub<span class="nav-menu-caret" aria-hidden="true">▾</span></summary><div class="nav-menu-panel"><a href="https://github.com/jacquesh82/orp-implementation" rel="noopener"><span class="nav-menu-title">Implementation</span><span class="nav-menu-desc">orp-implementation ↗</span></a><a href="https://github.com/jacquesh82/orp-specs" rel="noopener"><span class="nav-menu-title">Specifications</span><span class="nav-menu-desc">orp-specs ↗</span></a></div></details>
+        </div>
+        <a class="site-button" href="./" aria-current="page"><span>Try it</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+      </nav>
+    </header>
+    <header class="top">
+      <a class="brand" href="#lab" data-i18n-aria="nav.home" aria-label="OptiRelay Studio — home">
+        <span class="logo" aria-hidden="true"><i></i><i></i><i></i><b></b></span>
+        <span><span class="brand-name">OptiRelay </span><em>Studio</em></span>
+      </a>
+      <nav data-i18n-aria="nav.label" aria-label="Views">
+        <a href="#lab" data-view="lab" data-i18n="nav.lab">Optical lab</a>
+        <a href="#live" data-view="live" data-i18n="nav.live">Real transfer</a>
+        <a href="#anatomy" data-view="anatomy" data-i18n="nav.anatomy">Anatomy</a>
+      </nav>
+      <div class="lang" role="group" id="lang-switch" data-i18n-aria="nav.lang" aria-label="Language"></div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <p class="eyebrow">ORP v0.2 · Optical Relay Protocol</p>
+        <h1 data-i18n="hero.title">Bytes carried by light.</h1>
+        <p class="lede" data-i18n-html="hero.lede">OptiRelay moves files from one device to another <b>through a screen and a camera</b>: no network, no Bluetooth, no cable. Authenticated pairing, AES-256-GCM, Reed-Solomon, fountain code and temporal colour modulation.</p>
+      </div>
+      <ul class="pkgs" data-i18n-aria="hero.pkgs" aria-label="npm packages used">
+        <li><a href="https://www.npmjs.com/package/@optirelay/core" target="_blank" rel="noopener"><code>@optirelay/core</code><span data-i18n="pkg.core"></span></a></li>
+        <li><a href="https://www.npmjs.com/package/@optirelay/optical" target="_blank" rel="noopener"><code>@optirelay/optical</code><span data-i18n="pkg.optical"></span></a></li>
+        <li><a href="https://www.npmjs.com/package/@optirelay/browser" target="_blank" rel="noopener"><code>@optirelay/browser</code><span data-i18n="pkg.browser"></span></a></li>
+      </ul>
+    </section>
+
+    <!-- ═══════════════════════════ LAB ═══════════════════════════ -->
+    <main id="view-lab" class="view">
+      <p class="intro" data-i18n-html="lab.intro">The whole protocol runs here, <b>on a single device</b>: the sender paints real ORP frames, a <b>simulated optical channel</b> distorts them the way a hand-held camera would (<code>degradeImage</code>), and the receiver decodes them pixel by pixel (<code>TmReceiver</code>). Degrade the channel and watch what breaks, what Reed-Solomon repairs and what the fountain code catches up on.</p>
+
+      <div class="lab">
+        <!-- Sender -->
+        <article class="panel" id="tx">
+          <header class="panel-h"><span class="num">1</span><h2 data-i18n="lab.tx.title">Sender</h2><code class="api">SenderSession</code></header>
+
+          <div class="tabs small" role="tablist" data-i18n-aria="common.contentToSend">
+            <button role="tab" aria-selected="true" data-src="text" data-i18n="common.text">Text</button>
+            <button role="tab" aria-selected="false" data-src="image" data-i18n="lab.tx.testImage">Test image</button>
+            <button role="tab" aria-selected="false" data-src="file" data-i18n="common.file">File…</button>
+          </div>
+          <textarea id="tx-text" rows="5" data-i18n-aria="common.messageToSend"></textarea>
+          <div id="tx-file-box" class="filebox" hidden>
+            <input type="file" id="tx-file" />
+            <span id="tx-file-info" class="soft" data-i18n="common.noFile">No file</span>
+          </div>
+
+          <div class="fields">
+            <label><span data-i18n="common.representation">Representation</span>
+              <select id="tx-codec">
+                <option value="2" data-i18n="lab.tx.codec4">TM4 · 2 bits/module · robust</option>
+                <option value="3" data-i18n="lab.tx.codec8">TM8 · 3 bits/module · 2× throughput</option>
+              </select>
+            </label>
+            <label><span data-i18n="lab.tx.pairing">Pairing</span>
+              <select id="tx-pairing">
+                <option value="passphrase" data-i18n="lab.tx.pairPass">Typed code · PBKDF2</option>
+                <option value="codes" data-i18n="lab.tx.pairCodes">Crossed codes · ECDH P-256</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="row">
+            <button id="run" class="primary" data-i18n="lab.tx.run">▶ Start transmission</button>
+            <button id="stop" disabled data-i18n="common.stop">■ Stop</button>
+          </div>
+
+          <div class="screen" data-i18n-aria="lab.tx.screen">
+            <canvas id="tx-screen" width="424" height="424"></canvas>
+            <span class="pill" id="tx-phase">—</span>
+            <span class="caption" id="tx-caption">Sender screen</span>
+          </div>
+
+          <div class="secret" id="tx-secret" hidden>
+            <span class="soft" data-i18n="lab.tx.secret">Code shown as text (never inside the image)</span>
+            <b class="mono big" id="tx-code">····-····-····</b>
+          </div>
+
+          <dl class="kv">
+            <div><dt data-i18n="lab.tx.frames">Frames sent</dt><dd id="tx-frames">0</dd></div>
+            <div><dt data-i18n="lab.tx.symbols">Symbols sent</dt><dd id="tx-symbols">0</dd></div>
+            <div><dt data-i18n="lab.tx.payload">Payload</dt><dd id="tx-size">—</dd></div>
+            <div><dt data-i18n="lab.tx.sas">Sender SAS</dt><dd class="mono" id="tx-sas">— —</dd></div>
+          </dl>
+        </article>
+
+        <!-- Channel -->
+        <article class="panel" id="ch">
+          <header class="panel-h"><span class="num">2</span><h2 data-i18n="lab.ch.title">Optical channel</h2><code class="api">degradeImage</code></header>
+
+          <div class="screen cam" data-i18n-aria="lab.ch.camera">
+            <canvas id="ch-cam" width="424" height="424"></canvas>
+            <canvas id="ch-overlay" class="overlay" width="424" height="424"></canvas>
+            <span class="pill" id="ch-kind">—</span>
+            <span class="caption" id="ch-advice">Camera view</span>
+          </div>
+
+          <div class="presets" role="group" data-i18n-aria="lab.ch.presets">
+            <button data-preset="ideal" data-i18n="lab.preset.ideal">Perfect lab</button>
+            <button data-preset="hand" class="on" data-i18n="lab.preset.hand">Hand-held</button>
+            <button data-preset="bright" data-i18n="lab.preset.bright">Bright room</button>
+            <button data-preset="hell" data-i18n="lab.preset.hell">Hell</button>
+          </div>
+
+          <div class="sliders" id="sliders"></div>
+
+          <label class="speed"><span data-i18n="lab.ch.speed">Speed</span>
+            <select id="speed">
+              <option value="250" data-i18n="lab.ch.speedReal">Real time · 250 ms/subframe</option>
+              <option value="60" selected data-i18n="lab.ch.speedFast">Fast · 60 ms</option>
+              <option value="0" data-i18n="lab.ch.speedTurbo">Turbo</option>
+            </select>
+          </label>
+        </article>
+
+        <!-- Receiver -->
+        <article class="panel" id="rx">
+          <header class="panel-h"><span class="num">3</span><h2 data-i18n="lab.rx.title">Receiver</h2><code class="api">ReceiverSession</code></header>
+
+          <ol class="steps" id="rx-steps">
+            <li data-step="init" data-i18n="lab.rx.step.init">Init code read</li>
+            <li data-step="pair" data-i18n="lab.rx.step.pair">Keys derived</li>
+            <li data-step="sas" data-i18n="lab.rx.step.sas">SAS compared</li>
+            <li data-step="data" data-i18n="lab.rx.step.data">Fountain reception</li>
+            <li data-step="ok" data-i18n="lab.rx.step.ok">SHA-256 verified</li>
+          </ol>
+
+          <div class="typing" id="rx-typing" hidden>
+            <span class="soft" data-i18n="lab.rx.typing">The user types the code:</span>
+            <span class="mono field" id="rx-typed"></span>
+          </div>
+          <div class="sas-compare" id="rx-sas-box" hidden>
+            <div><span class="soft" data-i18n="lab.rx.sender">Sender</span><b class="mono" id="cmp-tx">—</b></div>
+            <span class="eq" id="cmp-eq">=</span>
+            <div><span class="soft" data-i18n="lab.rx.receiver">Receiver</span><b class="mono" id="cmp-rx">—</b></div>
+          </div>
+
+          <div class="meter">
+            <div class="meter-h"><span data-i18n="lab.rx.useful">Useful symbols</span><span class="mono" id="rx-sym">0 / K</span></div>
+            <div class="bar"><i id="rx-bar"></i><b id="rx-kmark" data-i18n-title="lab.rx.kmark"></b></div>
+          </div>
+          <div class="blocks" id="rx-blocks" data-i18n-aria="lab.rx.blocks"></div>
+
+          <dl class="kv four">
+            <div><dt data-i18n="lab.st.images">Images</dt><dd id="st-images">0</dd></div>
+            <div><dt data-i18n="lab.st.located">Located</dt><dd id="st-located">0</dd></div>
+            <div><dt data-i18n="lab.st.mixed">Mixed rejected</dt><dd id="st-mixed">0</dd></div>
+            <div><dt data-i18n="lab.st.valid">Valid frames</dt><dd id="st-valid">0</dd></div>
+            <div><dt data-i18n="lab.st.lost">Lost (channel)</dt><dd id="st-lost">0</dd></div>
+            <div><dt data-i18n="lab.st.replays">Duplicates</dt><dd id="st-replays">0</dd></div>
+            <div><dt data-i18n="lab.st.corrupt">Corrupted</dt><dd id="st-corrupt">0</dd></div>
+            <div><dt data-i18n="lab.st.conf">Confidence</dt><dd id="st-conf">—</dd></div>
+          </dl>
+
+          <div class="photometry">
+            <span class="soft" data-i18n="lab.rx.gains">Camera gains estimated (pilots)</span>
+            <div class="gains"><i class="r" id="g-r"></i><i class="g" id="g-g"></i><i class="b" id="g-b"></i></div>
+            <span class="soft mono" id="g-text">—</span>
+          </div>
+
+          <div class="result" id="rx-result" hidden>
+            <div class="result-h"><span class="ok" data-i18n="common.received">✓ Received and verified</span><span class="soft mono" id="rx-name"></span></div>
+            <div class="preview" id="rx-preview"></div>
+            <dl class="kv four tight" id="rx-summary"></dl>
+            <button id="rx-save" data-i18n="lab.rx.saveFile">Save the file</button>
+          </div>
+        </article>
+      </div>
+
+      <div class="lab-bottom">
+        <article class="panel spy" id="spy">
+          <header class="panel-h"><span class="num eye">👁</span><h2 data-i18n="lab.spy.title">Eavesdropper</h2><code class="api">ReceiverSession</code></header>
+          <p class="soft" data-i18n="lab.spy.desc"></p>
+          <dl class="kv">
+            <div><dt data-i18n="lab.spy.guess">Their guess</dt><dd class="mono" id="spy-guess">—</dd></div>
+            <div><dt data-i18n="lab.spy.sas">Their SAS</dt><dd class="mono" id="spy-sas">—</dd></div>
+            <div><dt data-i18n="lab.spy.seen">Frames captured</dt><dd id="spy-seen">0</dd></div>
+            <div><dt data-i18n="lab.spy.forged">Rejected “falsifiee”</dt><dd id="spy-forged">0</dd></div>
+          </dl>
+          <p class="verdict" id="spy-verdict"></p>
+        </article>
+
+        <article class="panel log">
+          <header class="panel-h"><h2 data-i18n="lab.log.title">Protocol log</h2><button id="log-clear" class="ghost" data-i18n="lab.log.clear">Clear</button></header>
+          <ol id="log" aria-live="polite"></ol>
+        </article>
+      </div>
+    </main>
+
+    <!-- ═══════════════════════════ LIVE ═══════════════════════════ -->
+    <main id="view-live" class="view" hidden>
+      <p class="intro" data-i18n-html="live.intro">For real: open this page on <b>two devices</b>. One displays, the other films. The code to type is stretched by PBKDF2 (600,000 iterations) into AES-256-GCM keys, then a 6-digit SAS is compared.</p>
+      <div class="caps" id="caps"></div>
+
+      <section class="panel" id="live-choice">
+        <div class="tabs small" role="tablist" data-i18n-aria="common.contentToSend">
+          <button role="tab" aria-selected="true" data-lsrc="text" data-i18n="common.text">Text</button>
+          <button role="tab" aria-selected="false" data-lsrc="file" data-i18n="common.file">File…</button>
+        </div>
+        <textarea id="live-text" rows="3" data-i18n-aria="common.messageToSend"></textarea>
+        <div id="live-file-box" class="filebox" hidden>
+          <input type="file" id="live-file" />
+          <span id="live-file-info" class="soft" data-i18n="common.noFile">No file</span>
+        </div>
+        <div class="fields">
+          <label><span data-i18n="common.representation">Representation</span>
+            <select id="live-codec">
+              <option value="2" data-i18n="live.codec4">TM4 · robust</option>
+              <option value="3" data-i18n="live.codec8">TM8 · fast (good camera)</option>
+            </select>
+          </label>
+          <label><span data-i18n="live.subframe">Subframe</span>
+            <select id="live-period">
+              <option value="250" data-i18n="live.p250">250 ms · safe</option>
+              <option value="125" data-i18n="live.p125">125 ms</option>
+              <option value="66" data-i18n="live.p66">66 ms · 120 Hz screen</option>
+            </select>
+          </label>
+          <label><span data-i18n="live.grids">Grids</span>
+            <select id="live-grids">
+              <option value="auto" data-i18n="live.gridsAuto" selected>Automatic</option>
+              <option value="1" data-i18n="live.grids1">1 grid</option>
+              <option value="2">2 × 2</option>
+              <option value="3">3 × 3</option>
+              <option value="4">4 × 4</option>
+            </select>
+          </label>
+        </div>
+        <div class="row big-choice">
+          <button id="live-send" class="primary" data-i18n="live.send">📤 Send from this screen</button>
+          <button id="live-receive" data-i18n="live.receive">📷 Receive with the camera</button>
+        </div>
+      </section>
+
+      <section class="panel" id="live-sender" hidden>
+        <div class="live-grid">
+          <div class="stage" id="live-stage"><canvas id="live-canvas" data-i18n-aria="live.canvas"></canvas></div>
+          <aside>
+            <p class="soft" data-i18n="live.codeToType">Code to type on the receiving device:</p>
+            <p class="mono huge" id="live-code">····-····-····</p>
+            <p class="soft" data-i18n="live.sameSas">The receiver must show the same SAS:</p>
+            <p class="mono big" id="live-sas">— —</p>
+            <dl class="kv">
+              <div><dt data-i18n="live.frames">Frames</dt><dd id="live-frames">0</dd></div>
+              <div><dt data-i18n="live.throughput">Displayed rate</dt><dd id="live-thr">—</dd></div>
+              <div><dt data-i18n="live.size">Size</dt><dd id="live-size">—</dd></div>
+              <div><dt data-i18n="live.modules">Modules</dt><dd id="live-module">—</dd></div>
+              <div><dt data-i18n="live.grids">Grids</dt><dd id="live-columns">—</dd></div>
+            </dl>
+            <p class="diag" id="live-diag"></p>
+            <button id="live-stop" data-i18n="common.stop">■ Stop</button>
+          </aside>
+        </div>
+      </section>
+
+      <section class="panel" id="live-receiver" hidden>
+        <div class="live-grid">
+          <div class="camwrap"><video id="live-video" playsinline muted></video><canvas id="live-overlay" class="overlay"></canvas></div>
+          <aside>
+            <p class="status" id="live-status" aria-live="polite"></p>
+            <p class="soft" id="live-advice"></p>
+            <form class="row" id="live-code-form" hidden>
+              <input id="live-code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" data-i18n-aria="live.codeAria" />
+              <button type="submit" class="primary" data-i18n="live.unlock">Unlock</button>
+            </form>
+            <div id="live-compare" hidden>
+              <p><span data-i18n="live.verif">Verification code:</span> <b class="mono big" id="live-rx-sas">— —</b></p>
+              <p class="soft" data-i18n="live.mustMatch">It must match the one on the sender.</p>
+              <div class="row"><button class="primary" id="live-match" data-i18n="live.match">Match, receive</button><button id="live-mismatch" data-i18n="live.mismatch">Different</button></div>
+            </div>
+            <div class="meter" id="live-meter" hidden>
+              <div class="meter-h"><span id="live-pct">0 %</span><span class="mono" id="live-eta"></span></div>
+              <div class="bar"><i id="live-bar"></i></div>
+            </div>
+            <div class="result" id="live-result" hidden>
+              <div class="result-h"><span class="ok" data-i18n="common.received">✓ Received and verified</span><span class="soft mono" id="live-name"></span></div>
+              <div class="preview" id="live-preview"></div>
+              <button id="live-save" data-i18n="common.save">Save</button>
+              <p class="soft" id="live-save-msg"></p>
+            </div>
+            <button id="live-cancel" class="ghost" data-i18n="live.cancel">Cancel</button>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <!-- ═══════════════════════════ ANATOMY ═══════════════════════════ -->
+    <main id="view-anatomy" class="view" hidden>
+      <section class="panel">
+        <header class="panel-h"><h2 data-i18n="an.grid.title">The ORP grid · 41 × 41 modules</h2><code class="api">structuralGrid · writeBytesToGrid · renderTmPair</code></header>
+        <div class="anat">
+          <div class="anat-canvas">
+            <canvas id="grid-canvas" width="540" height="540"></canvas>
+            <div class="tip" id="grid-tip" hidden></div>
+          </div>
+          <div class="anat-side">
+            <div class="tabs small wrap" role="tablist" data-i18n-aria="an.grid.modes" id="grid-modes">
+              <button role="tab" aria-selected="true" data-mode="roles" data-i18n="an.mode.roles">Roles</button>
+              <button role="tab" aria-selected="false" data-mode="1">MONO_2</button>
+              <button role="tab" aria-selected="false" data-mode="2">COLOR_4</button>
+              <button role="tab" aria-selected="false" data-mode="3">COLOR_8</button>
+              <button role="tab" aria-selected="false" data-mode="tmR">TM · R</button>
+              <button role="tab" aria-selected="false" data-mode="tmP">TM · P</button>
+              <button role="tab" aria-selected="false" data-mode="tmFlick" data-i18n="an.mode.flick">TM · flicker</button>
+            </div>
+            <label class="block"><span data-i18n="an.grid.content">Encoded content</span>
+              <input id="grid-text" maxlength="90" />
+            </label>
+            <ul class="legend" id="grid-legend"></ul>
+            <p class="soft" id="grid-explain"></p>
+            <table class="cap">
+              <thead><tr><th data-i18n="an.cap.codec">Codec</th><th data-i18n="an.cap.bpm">bits/module</th><th data-i18n="an.cap.bits">bits avail.</th><th data-i18n="an.cap.sym">symbols/frame</th><th data-i18n="an.cap.frame">encrypted frame</th></tr></thead>
+              <tbody id="cap-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <header class="panel-h"><h2 data-i18n="an.frame.title">Anatomy of an encrypted frame</h2><code class="api">frameSize · segmentCount</code></header>
+        <div class="tabs small" role="tablist" data-i18n-aria="an.frame.codec" id="frame-codec">
+          <button role="tab" aria-selected="true" data-fc="2" data-i18n="an.frame.c4">COLOR_4 / TM4 · 2 symbols</button>
+          <button role="tab" aria-selected="false" data-fc="3" data-i18n="an.frame.c8">COLOR_8 / TM8 · 4 symbols</button>
+        </div>
+        <div class="strip" id="frame-strip"></div>
+        <ul class="strip-legend" id="frame-legend"></ul>
+      </section>
+
+      <section class="panel">
+        <header class="panel-h"><h2 data-i18n="an.ft.title">LT fountain code · no frame is indispensable</h2><code class="api">ltNeighbors · FountainDecoder</code></header>
+        <p class="soft" data-i18n-html="an.ft.desc">The block is split into <b>K</b> source symbols. Each symbol sent is the XOR of a small subset drawn from a seed (robust soliton). It does not matter which ones get lost: receiving slightly more than K is enough. The ORP decoder combines peeling and Gaussian elimination over GF(2).</p>
+        <div class="fountain-ctl">
+          <label>K <input type="range" id="ft-k" min="4" max="96" value="24" /><output id="ft-k-out">24</output></label>
+          <label><span data-i18n="an.ft.loss">Loss</span> <input type="range" id="ft-loss" min="0" max="80" value="30" /><output id="ft-loss-out">30 %</output></label>
+          <div class="row">
+            <button id="ft-step" data-i18n="an.ft.step">+1 symbol</button>
+            <button id="ft-auto" class="primary">▶ Auto</button>
+            <button id="ft-reset" class="ghost" data-i18n="an.ft.reset">Reset</button>
+            <button id="ft-bench" data-i18n="an.ft.bench">Experiment × 300</button>
+          </div>
+        </div>
+        <div class="sources" id="ft-sources" data-i18n-aria="an.ft.sources"></div>
+        <div class="ft-status">
+          <div><span class="soft" data-i18n="an.ft.sent">Sent</span><b id="ft-sent">0</b></div>
+          <div><span class="soft" data-i18n="an.ft.lost">Lost</span><b id="ft-lost">0</b></div>
+          <div><span class="soft" data-i18n="an.ft.recv">Received</span><b id="ft-recv">0</b></div>
+          <div><span class="soft" data-i18n="an.ft.peel">Peeling only</span><b id="ft-peel">0 / 24</b></div>
+          <div><span class="soft" data-i18n="an.ft.orp">ORP decoder</span><b id="ft-orp">—</b></div>
+        </div>
+        <div class="feed" id="ft-feed" data-i18n-aria="an.ft.feed"></div>
+        <div class="bench" id="ft-bench-out" hidden></div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span data-i18n-html="foot.built">Demo built on <code>@optirelay/*</code> 0.2.0 · Apache-2.0</span>
+      <a href="https://github.com/jacquesh82/orp-specs" target="_blank" rel="noopener" data-i18n="foot.spec">ORP specification ↗</a>
+    </footer>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

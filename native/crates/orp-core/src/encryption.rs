@@ -1,6 +1,7 @@
 //! End-to-end encryption (port of encryption.ts): ECDH P-256 key agreement,
-//! HKDF-SHA-256 derivation, AES-GCM (128-bit tag), HMAC and SHA-256 — the
-//! same primitives as WebCrypto, through the RustCrypto crates.
+//! HKDF-SHA-256 derivation (PBKDF2-HMAC-SHA-256 for the pairing passphrase),
+//! AES-GCM (128-bit tag), HMAC and SHA-256 — the same primitives as
+//! WebCrypto, through the RustCrypto crates.
 //!
 //! Everything goes through the `CryptoProvider` trait; randomness is itself
 //! injected (`RandomSource`): the system's in production, a reproducible
@@ -65,6 +66,8 @@ pub trait CryptoProvider {
     /// 32-byte ECDH shared secret (x coordinate, like deriveBits 256).
     fn ecdh_agree(&self, private_key: &PrivateKey, public_key: &[u8]) -> Result<[u8; 32], OrpError>;
     fn derive_hkdf(&self, secret: &[u8], salt: &[u8], info: &str, length: usize) -> Result<Vec<u8>, OrpError>;
+    /// PBKDF2-HMAC-SHA-256 — stretching of the pairing passphrase (ORP v0.2).
+    fn derive_pbkdf2(&self, password: &[u8], salt: &[u8], iterations: u32, length: usize) -> Result<Vec<u8>, OrpError>;
     /// AES-GCM: (ciphertext, 16-byte tag).
     fn encrypt_aead(&self, key: &[u8], nonce: &[u8], plaintext: &[u8], aad: &[u8])
         -> Result<(Vec<u8>, [u8; AEAD_TAG_SIZE]), OrpError>;
@@ -130,6 +133,10 @@ impl CryptoProvider for CryptoRust {
         Ok(o)
     }
 
+    fn derive_pbkdf2(&self, password: &[u8], salt: &[u8], iterations: u32, length: usize) -> Result<Vec<u8>, OrpError> {
+        pbkdf2_hmac_sha256(password, salt, iterations, length)
+    }
+
     fn encrypt_aead(
         &self,
         key: &[u8],
@@ -184,5 +191,89 @@ impl CryptoProvider for CryptoRust {
 
     fn sha256(&self, data: &[u8]) -> [u8; 32] {
         Sha256::digest(data).into()
+    }
+}
+
+/// SHA-256 initial state (FIPS 180-4, §5.3.3).
+const SHA256_IV: [u32; 8] =
+    [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+
+/// One SHA-256 compression of a 64-byte block, from the given state.
+fn compress_block(state: &[u32; 8], block: &[u8; 64]) -> [u32; 8] {
+    let mut s = *state;
+    sha2::compress256(&mut s, &[(*block).into()]);
+    s
+}
+
+/// PBKDF2-HMAC-SHA-256 (RFC 8018 §5.2), like WebCrypto `deriveBits`.
+///
+/// No `pbkdf2` crate: written over the SHA-256 compression function. The
+/// inner and outer HMAC states (key ⊕ ipad, key ⊕ opad) are computed once;
+/// each of the 600 000 iterations then costs exactly two compressions — the
+/// whole derivation stays well under a second on a phone, and in debug tests.
+pub fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32, length: usize) -> Result<Vec<u8>, OrpError> {
+    if iterations == 0 || length == 0 || length as u64 > 32 * u32::MAX as u64 {
+        return Err(crypto_error("invalid PBKDF2 parameters"));
+    }
+    // HMAC key: hashed if longer than the SHA-256 block.
+    let mut key = [0u8; 64];
+    if password.len() > 64 {
+        key[..32].copy_from_slice(&Sha256::digest(password));
+    } else {
+        key[..password.len()].copy_from_slice(password);
+    }
+    let pad_state = |pad: u8| {
+        let mut block = [0u8; 64];
+        for (b, k) in block.iter_mut().zip(&key) {
+            *b = k ^ pad;
+        }
+        let state = compress_block(&SHA256_IV, &block);
+        wipe(&mut block);
+        state
+    };
+    let (inner, outer) = (pad_state(0x36), pad_state(0x5c));
+    wipe(&mut key);
+    let prf = <Hmac<Sha256> as Mac>::new_from_slice(password).expect("HMAC accepts any key length");
+    // A 32-byte message after the 64-byte pad block: 96 bytes = 768 bits,
+    // padding 0x80 then the length — one block.
+    let mut block = [0u8; 64];
+    block[32] = 0x80;
+    block[62..64].copy_from_slice(&768u16.to_be_bytes());
+    let state_bytes = |state: [u32; 8], into: &mut [u8]| {
+        for (o, w) in into.chunks_exact_mut(4).zip(state) {
+            o.copy_from_slice(&w.to_be_bytes());
+        }
+    };
+    let mut output = Vec::with_capacity(length);
+    let mut index: u32 = 1;
+    while output.len() < length {
+        // U1 = HMAC(P, S ‖ INT(i)): salt of any length, through the hmac crate.
+        let mut mac = prf.clone();
+        mac.update(salt);
+        mac.update(&index.to_be_bytes());
+        let mut u: [u8; 32] = mac.finalize().into_bytes().into();
+        let mut t = u;
+        for _ in 1..iterations {
+            block[..32].copy_from_slice(&u);
+            state_bytes(compress_block(&inner, &block), &mut block[..32]);
+            state_bytes(compress_block(&outer, &block), &mut u);
+            for (a, b) in t.iter_mut().zip(&u) {
+                *a ^= b;
+            }
+        }
+        let n = (length - output.len()).min(32);
+        output.extend_from_slice(&t[..n]);
+        wipe(&mut u);
+        wipe(&mut t);
+        index += 1;
+    }
+    wipe(&mut block);
+    Ok(output)
+}
+
+/// Wipes a buffer — volatile writes: the optimizer cannot remove them.
+pub fn wipe(buffer: &mut [u8]) {
+    for o in buffer.iter_mut() {
+        unsafe { std::ptr::write_volatile(o, 0) };
     }
 }

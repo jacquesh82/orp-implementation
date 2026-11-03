@@ -1,493 +1,116 @@
-// Application screens, after the Material 3 mock-up (8 screens).
-// Displayed values are properties: the ORP engine (Rust) feeds
-// them; until then, the mock-up provides sample values.
+// The app screens: home (Receive / Send), live reception, code and
+// verification, received file, sending choice, transmission. Displayed
+// values are properties fed by the Rust engine; the defaults are sample
+// values for the off-screen captures.
 
 import { Theme, Icons } from "theme.slint";
-import { Icon, Button, Segmented, Badge, SettingRow, Separator, Progress, Encrypted, BlockBars, BlockView } from "components.slint";
+import { Icon, Dashed, Rule, Label, Tag, Mark, TopBar, Button, Choice, Progress, Figure, BlockBars, BlockView } from "components.slint";
 
-// ── Receive (home, destination 1) ──────────────────────────────────────────
-export component ReceiveScreen inherits VerticalLayout {
-    in-out property <int> mode: 0; // 0 live, 1 slow motion
-    in property <string> info: "";
-    in property <[BlockView]> blocks: [];
-    callback open-camera();
-    callback film();
-    callback abort();
-    padding-left: 16px;
-    padding-right: 16px;
-    padding-top: 8px;
-    padding-bottom: 16px;
-    spacing: 20px;
-
+// ── Home: the two functions ────────────────────────────────────────────────
+component ChoiceTile inherits Rectangle {
+    in property <string> index;
+    in property <string> title;
+    in property <string> text;
+    in property <string> action;
+    in property <string> icon-path;
+    in property <bool> primary: false;
+    callback click();
+    background: zone.pressed ? Theme.panel-2 : Theme.black;
+    accessible-role: button;
+    accessible-label: root.title;
+    accessible-action-default => { root.click(); }
+    zone := TouchArea { clicked => { root.click(); } }
     VerticalLayout {
-        spacing: 8px;
-        Text { text: "Reading mode"; font-size: 14px; font-weight: 500; color: Theme.soft; }
-        Segmented {
-            left-label: "Live";
-            right-label: "Slow-mo";
-            choice <=> root.mode;
-        }
-        Text {
-            text: root.mode == 0
-                ? "Live: the camera reads in real time (subframes of 100 ms or more)."
-                : "Slow-mo: the app films at 240 fps, then reads the video — for 17 or 33 ms.";
-            font-size: 13px;
-            color: Theme.soft;
-            wrap: word-wrap;
-        }
-    }
-
-    Rectangle {
-        border-radius: 16px;
-        background: Theme.primary;
-        VerticalLayout {
-            padding: 20px;
-            spacing: 16px;
-            HorizontalLayout {
-                spacing: 12px;
-                Rectangle {
-                    width: 44px;
-                    height: 44px;
-                    border-radius: 12px;
-                    background: #ffffff29;
-                    Icon { icon-path: Icons.camera; tint: white; }
-                }
-                Text {
-                    text: "Receive with the camera";
-                    font-size: 20px;
-                    font-weight: 600;
-                    color: white;
-                    vertical-alignment: center;
-                    wrap: word-wrap;
-                    horizontal-stretch: 1;
-                }
-            }
-            for step[i] in [
-                "Aim at the sending screen: get the three large corner squares in the frame.",
-                "Compare the 6-digit code with the sender's.",
-                root.mode == 0 ? "Keep the phone still until the end." : "Film until “Enough sent”; the app then reads the video.",
-            ]: HorizontalLayout {
-                spacing: 12px;
-                Text { text: i + 1; font-family: Theme.mono; font-weight: 500; font-size: 15px; color: white; }
-                // Explicit width: the height of wrapped text is computed from it.
-                Text { text: step; width: root.width - 16px * 2 - 20px * 2 - 12px - 12px; font-size: 15px; color: #e6edfc; wrap: word-wrap; }
-            }
-        }
-    }
-
-    Rectangle { vertical-stretch: 1; }
-
-    if root.info != "": Rectangle {
-        border-radius: 16px;
-        background: Theme.primary-container;
-        VerticalLayout {
-            padding: 14px;
-            padding-left: 16px;
-            spacing: 4px;
-            Text { text: root.info; font-size: 14px; color: Theme.on-primary-container; wrap: word-wrap; }
-            if root.blocks.length > 1: BlockBars { blocks: root.blocks; dark: false; control-height: 20px; }
-            HorizontalLayout {
-                alignment: start;
-                Button { text: "Abandon this transfer"; kind: "text"; control-height: 40px; click => { root.abort(); } }
-            }
-        }
-    }
-
-    Button {
-        text: root.mode == 0 ? "Open camera" : (root.info != "" ? "Film the rest" : "Film");
-        icon-path: root.mode == 0 ? Icons.camera : Icons.save;
-        click => {
-            if root.mode == 0 { root.open-camera(); } else { root.film(); }
-        }
-    }
-}
-
-// ── Send (destination 2) ───────────────────────────────────────────────────
-export component SendScreen inherits VerticalLayout {
-    in property <string> file-name: "photo.jpg";
-    in property <string> file-detail: "59.7 KB · ≈ 30 s in 2 × 2";
-    in property <string> optical-mode: "Auto — TM8, TM4 fallback";
-    in property <string> grids: "2 × 2";
-    in property <string> subframe: "33 ms — film in slow-mo";
-    in property <bool> calibrated: true;
-    in property <bool> file-chosen: true;
-    callback change-file();
-    callback start-transmission();
-    callback set(int);
-    padding-left: 16px;
-    padding-right: 16px;
-    padding-top: 8px;
-    padding-bottom: 16px;
-    spacing: 20px;
-
-    Rectangle {
-        border-radius: 16px;
-        background: Theme.surface;
-        border-width: 1px;
-        border-color: Theme.divider;
-        HorizontalLayout {
-            padding: 14px;
-            padding-left: 16px;
-            spacing: 14px;
-            Rectangle {
-                width: 44px;
-                height: 44px;
-                border-radius: 12px;
-                background: Theme.primary-container;
-                Icon { icon-path: Icons.file; size: 22px; tint: Theme.on-primary-container; }
-            }
-            VerticalLayout {
-                alignment: center;
-                spacing: 2px;
-                horizontal-stretch: 1;
-                Text { text: root.file-name; font-size: 16px; font-weight: 600; color: Theme.ink; }
-                Text { text: root.file-detail; font-size: 13px; color: Theme.soft; }
-            }
-            Button { text: "Change"; kind: "text"; control-height: 40px; y: 2px; click => { root.change-file(); } }
-        }
-    }
-
-    Rectangle {
-        border-radius: 16px;
-        background: Theme.surface;
-        border-width: 1px;
-        border-color: Theme.divider;
-        clip: true;
-        VerticalLayout {
-            HorizontalLayout {
-                padding-left: 16px;
-                padding-right: 16px;
-                padding-top: 14px;
-                padding-bottom: 6px;
-                Text { text: "Transmission settings"; font-size: 14px; font-weight: 600; color: Theme.soft; horizontal-stretch: 1; }
-                if root.calibrated: Rectangle {
-                    height: 24px;
-                    width: calibrated-label.preferred-width + 16px;
-                    border-radius: 6px;
-                    background: Theme.ok-pale;
-                    calibrated-label := Text { text: "Calibrated"; font-size: 12px; font-weight: 500; color: Theme.ok-ink; }
-                }
-            }
-            SettingRow { title: "Optical mode"; value: root.optical-mode; click => { root.set(0); } }
-            Separator { x: 16px; width: parent.width - 32px; }
-            SettingRow { title: "Grids on screen"; value: root.grids; click => { root.set(1); } }
-            Separator { x: 16px; width: parent.width - 32px; }
-            SettingRow { title: "Subframe duration"; value: root.subframe; click => { root.set(2); } }
-            Text {
-                text: root.calibrated ? "Settings suggested by the test bench calibration for this screen → phone pair." : "Tap a setting to change it. 17 and 33 ms: the receiver must film in slow-mo.";
-                font-size: 13px;
-                color: Theme.soft;
-                wrap: word-wrap;
-                x: 16px;
-                width: parent.width - 32px;
-            }
-            Rectangle { height: 16px; }
-        }
-    }
-
-    Rectangle { vertical-stretch: 1; }
-
-    Button { text: root.file-chosen ? "Start transmitting" : "Choose a file"; icon-path: root.file-chosen ? Icons.arrow : Icons.file; click => { if root.file-chosen { root.start-transmission(); } else { root.change-file(); } } }
-}
-
-// ── Sending (dark full screen) ─────────────────────────────────────────────
-export component SendingScreen inherits Rectangle {
-    in property <image> grid;
-    in property <string> code: "— —";
-    in property <string> count: "";
-    in property <string> hud: "";
-    callback stop();
-    background: Theme.night;
-
-    VerticalLayout {
-        HorizontalLayout {
-            height: 64px;
-            padding-left: 4px;
-            spacing: 4px;
-            Rectangle {
-                width: 48px;
-                Rectangle {
-                    width: 48px;
-                    height: 48px;
-                    accessible-role: button;
-                    accessible-label: "Stop transmitting";
-                    Icon { icon-path: Icons.close; tint: Theme.light; }
-                    TouchArea { clicked => { root.stop(); } }
-                }
-            }
-            Text { text: "Transmitting"; font-size: 20px; font-weight: 500; color: Theme.light; vertical-alignment: center; }
-        }
-        // The grid, white, as large as possible.
-        Rectangle {
-            height: self.width;
-            background: white;
-            // Scale 1: the grid is rendered at a whole number of physical pixels
-            // per module (send.rs) — no resampling, all
-            // modules the same width. Shrunk only if it overflows.
-            Image {
-                width: min(parent.width, root.grid.width * 1phx);
-                height: min(parent.height, root.grid.height * 1phx);
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                source: root.grid;
-                image-fit: contain;
-                image-rendering: pixelated;
-                accessible-role: image;
-                accessible-label: "Optical grid being transmitted";
-            }
-        }
-        VerticalLayout {
-            padding: 20px;
-            spacing: 12px;
-            vertical-stretch: 1;
-            if root.count != "": Text {
-                text: root.count;
-                font-size: 56px;
-                font-weight: 600;
-                color: Theme.light;
-                horizontal-alignment: center;
-            }
-            HorizontalLayout {
-                alignment: center;
-                spacing: 10px;
-                Text { text: "Code"; font-size: 16px; color: Theme.soft-light; vertical-alignment: center; }
-                Text { text: root.code; font-size: 32px; font-family: Theme.mono; font-weight: 600; color: Theme.light; }
-            }
-            Text { text: root.hud; font-size: 13px; font-family: Theme.mono; color: Theme.soft-light; horizontal-alignment: center; wrap: word-wrap; }
-            Rectangle { vertical-stretch: 1; }
-            Button { text: "Stop"; kind: "outlined"; dark: true; click => { root.stop(); } }
-        }
-    }
-}
-
-// ── Test bench · Diagnostics · Calibration (destination 3) ────────────────
-export struct CalibrationTrial {
-    name: string,
-    part: float,
-    useful: string,
-    retained: bool,
-}
-
-export struct MeasurementRow {
-    label: string,
-    value: string,
-}
-
-export component BenchScreen inherits VerticalLayout {
-    in-out property <int> bench-tab: 0;
-    // "Transfer test" tab.
-    in property <string> test-state: "";
-    in property <[MeasurementRow]> test-measurements: [];
-    in property <string> test-result: "";
-    in property <bool> test-ok: false;
-    in-out property <int> test-size: 1;
-    callback film-test();
-    callback send-test();
-    in property <[CalibrationTrial]> trials: [];
-    in property <string> recommendation: "";
-    in property <string> code-calibration: "";
-    in property <string> state: "On the sending screen: test bench › Diagnostics › “Send the calibration series”. Then film it here, during the countdown.";
-    callback film-series();
-    callback apply();
-
-    // Main tabs (Material 3).
-    HorizontalLayout {
-        height: 48px;
-        for label[i] in ["Diagnostics", "Transfer test"]: Rectangle {
-            property <bool> selected: root.bench-tab == i;
-            accessible-role: tab;
-            accessible-label: label;
-            accessible-checked: selected;
-            Text {
-                text: label;
-                font-size: 14px;
-                font-weight: selected ? 600 : 500;
-                color: selected ? Theme.primary : Theme.soft;
-            }
-            Rectangle {
-                y: parent.height - 3px;
-                height: 3px;
-                background: selected ? Theme.primary : transparent;
-            }
-            TouchArea { clicked => { root.bench-tab = i; } }
-        }
-    }
-    Separator { }
-
-    // Scrollable: the results and the recommendation overflow the screen.
-    if root.bench-tab == 0: Flickable {
-      vertical-stretch: 1;
-      content-width: self.width;
-      content-height: bench-content.preferred-height;
-      bench-content := VerticalLayout {
-        x: 0;
-        width: root.width;
         padding: 16px;
-        padding-bottom: 12px;
-        spacing: 14px;
-
-        Text { text: "Automatic calibration"; font-size: 18px; font-weight: 600; color: Theme.ink; }
-        Text {
-            text: root.state;
-            font-size: 14px;
-            color: Theme.soft;
-            wrap: word-wrap;
-        }
-
-        if root.trials.length > 0: Rectangle {
-            border-radius: 16px;
-            background: Theme.surface;
-            border-width: 1px;
-            border-color: Theme.divider;
-            clip: true;
-            VerticalLayout {
-                padding-bottom: 12px;
-                HorizontalLayout {
-                    padding: 16px;
-                    padding-top: 12px;
-                    padding-bottom: 8px;
-                    Text { text: "Results"; font-size: 14px; font-weight: 600; color: Theme.soft; horizontal-stretch: 1; }
-                }
-                for trial in root.trials: Rectangle {
-                    background: trial.retained ? #eef3fd : transparent;
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        padding-top: 8px;
-                        padding-bottom: 8px;
-                        spacing: 10px;
-                        Text { text: trial.name; width: 96px; font-size: 13px; font-family: Theme.mono; font-weight: trial.retained ? 600 : 400; color: Theme.ink; }
-                        Progress {
-                            y: (parent.height - 8px) / 2;
-                            part: trial.part;
-                            tint: trial.part < 0.5 ? Theme.alert : Theme.primary;
-                            horizontal-stretch: 1;
-                        }
-                        Text { text: trial.useful; width: 72px; horizontal-alignment: right; font-size: 13px; font-family: Theme.mono; color: Theme.ink; }
-                    }
-                }
-                Text {
-                    x: 16px;
-                    width: parent.width - 32px;
-                    text: "Bar: share of transmitted frames read without error. Useful: file bytes per filmed second.";
-                    font-size: 12px;
-                    color: Theme.soft;
-                    wrap: word-wrap;
-                }
-            }
-        }
-
-        if root.recommendation != "": Rectangle {
-            border-radius: 16px;
-            background: Theme.primary-container;
-            VerticalLayout {
-                padding: 16px;
-                padding-top: 14px;
-                padding-bottom: 14px;
-                spacing: 6px;
-                Text { text: "Recommended: " + root.recommendation; font-size: 15px; font-weight: 600; color: Theme.on-primary-container; wrap: word-wrap; }
-                HorizontalLayout {
-                    spacing: 8px;
-                    Text { text: "Code to enter on the bench:"; font-size: 13px; color: #1e3f78; vertical-alignment: center; }
-                    Text { text: root.code-calibration; font-size: 18px; font-family: Theme.mono; font-weight: 600; color: Theme.on-primary-container; }
-                }
-                HorizontalLayout {
-                    alignment: start;
-                    Button { text: "Also use for my sends"; kind: "text"; control-height: 40px; click => { root.apply(); } }
-                }
-            }
-        }
-
-        Button { text: "Film the calibration series"; icon-path: Icons.save; click => { root.film-series(); } }
-      }
-    }
-
-    // ── Transfer test: a real file, end to end, with measurements ──
-    if root.bench-tab == 1: Flickable {
-      vertical-stretch: 1;
-      content-width: self.width;
-      content-height: test-content.preferred-height;
-      test-content := VerticalLayout {
-        x: 0;
-        width: root.width;
-        padding: 16px;
-        padding-bottom: 12px;
-        spacing: 14px;
-
-        Text { text: "Receive from the bench"; font-size: 18px; font-weight: 600; color: Theme.ink; }
-        Text {
-            text: "On the sending screen: test bench › Transfer test › a file, then “Send”. Film from the countdown until “Enough sent”. The verification code is accepted automatically (bench passphrase): this is a test, not a secure transfer.";
-            font-size: 14px;
-            color: Theme.soft;
-            wrap: word-wrap;
-        }
-        Button { text: "Film the bench transmission"; icon-path: Icons.save; click => { root.film-test(); } }
-        if root.test-state != "": Text { text: root.test-state; font-size: 13px; color: Theme.soft; wrap: word-wrap; }
-
-        if root.test-measurements.length > 0: Rectangle {
-            border-radius: 16px;
-            background: Theme.surface;
-            border-width: 1px;
-            border-color: Theme.divider;
-            clip: true;
-            VerticalLayout {
-                padding-bottom: 8px;
-                Rectangle {
-                    background: root.test-ok ? Theme.ok-pale : #fdf1e3;
-                    HorizontalLayout {
-                        padding: 14px;
-                        padding-left: 16px;
-                        spacing: 10px;
-                        Icon { icon-path: root.test-ok ? Icons.checked : Icons.info; size: 20px; tint: root.test-ok ? Theme.ok-ink : Theme.alert; }
-                        Text { text: root.test-result; font-size: 14px; font-weight: 600; color: root.test-ok ? Theme.ok-ink : #7a3a06; wrap: word-wrap; horizontal-stretch: 1; }
-                    }
-                }
-                for line in root.test-measurements: HorizontalLayout {
-                    padding-left: 16px;
-                    padding-right: 16px;
-                    padding-top: 7px;
-                    padding-bottom: 7px;
-                    spacing: 12px;
-                    Text { text: line.label; font-size: 13px; color: Theme.soft; horizontal-stretch: 1; wrap: word-wrap; }
-                    Text { text: line.value; font-size: 13px; font-family: Theme.mono; color: Theme.ink; horizontal-alignment: right; }
-                }
-            }
-        }
-
-        Separator { }
-        Text { text: "Transmit to the bench"; font-size: 18px; font-weight: 600; color: Theme.ink; }
-        Text {
-            text: "The bench receives with its camera: test bench › Transfer test › “Open camera”. Random test file (incompressible), sent with the Send tab settings.";
-            font-size: 14px;
-            color: Theme.soft;
-            wrap: word-wrap;
-        }
+        spacing: 10px;
         HorizontalLayout {
+            Label { text: root.index; accent: true; vertical-alignment: center; horizontal-stretch: 1; }
+            Icon { icon-path: root.icon-path; size: 26px; tint: Theme.accent-text; }
+        }
+        Text { text: root.title; font-size: 28px; letter-spacing: -0.8px; color: Theme.white; }
+        Text { text: root.text; font-size: 14px; color: Theme.muted; wrap: word-wrap; }
+        Rectangle { height: 2px; }
+        Button { text: root.action; kind: root.primary ? "primary" : "outline"; click => { root.click(); } }
+    }
+    Dashed { }
+}
+
+export component HomeScreen inherits VerticalLayout {
+    callback receive();
+    callback send();
+
+    Rectangle {
+        height: 53px;
+        HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 16px;
             spacing: 8px;
-            for size[i] in ["10 KB", "50 KB", "200 KB"]: Button {
-                text: size;
-                kind: root.test-size == i ? "tonal" : "outlined";
-                control-height: 44px;
-                horizontal-stretch: 1;
-                click => { root.test-size = i; }
+            Mark { y: 15.5px; }
+            Text { text: "OptiRelay"; font-size: 21px; letter-spacing: -0.7px; color: Theme.white; vertical-alignment: center; horizontal-stretch: 1; }
+            Tag { y: 16.5px; text: "ORP V0.2"; }
+        }
+        Dashed { top: false; left: false; right: false; }
+    }
+    Rectangle {
+        background: @linear-gradient(180deg, #0943a0 0%, #062454 55%, #010101 100%);
+        VerticalLayout {
+            padding: 20px;
+            padding-top: 28px;
+            padding-bottom: 26px;
+            spacing: 14px;
+            HorizontalLayout { alignment: start; Tag { text: "SCREEN TO CAMERA / OFFLINE"; ground: Theme.black; } }
+            Text {
+                text: "A file from one screen to another camera.";
+                font-size: 30px;
+                letter-spacing: -1px;
+                color: Theme.white;
+                wrap: word-wrap;
+            }
+            Text {
+                text: "No network, no account: the file travels as an animated grid, encrypted end to end.";
+                font-size: 15px;
+                color: #ffffff99;
+                wrap: word-wrap;
             }
         }
-        Button { text: "Transmit a test file"; icon-path: Icons.screen; click => { root.send-test(); } }
-      }
+    }
+    VerticalLayout {
+        padding: 16px;
+        padding-top: 18px;
+        spacing: 14px;
+        vertical-stretch: 1;
+        ChoiceTile {
+            index: "01 / RECEIVE";
+            title: "Receive";
+            text: "Aim the camera at the sender's grid, type the code shown next to it, compare 6 digits.";
+            action: "OPEN THE CAMERA";
+            icon-path: Icons.camera;
+            primary: true;
+            click => { root.receive(); }
+        }
+        ChoiceTile {
+            index: "02 / SEND";
+            title: "Send";
+            text: "Pick a file: this screen shows it as a grid, with a one-time code for the receiver.";
+            action: "CHOOSE A FILE";
+            icon-path: Icons.screen;
+            click => { root.send(); }
+        }
+        Rectangle { vertical-stretch: 1; }
+        Label { text: "AES-GCM / ECDH P-256 / NO TELEMETRY"; font-size: 10px; horizontal-alignment: center; }
     }
 }
 
-// ── Live reception (dark full screen) ──────────────────────────────────────
+// ── Live reception (camera) ────────────────────────────────────────────────
 export component CaptureScreen inherits Rectangle {
-    in-out property <int> mode: 0;
     in property <string> advice: "Framing OK. Hold still.";
     in property <bool> framing-good: true;
     in property <string> code: "976 188";
     in property <float> part: 0.42;
-    in property <string> detail: "24.1 KB / 57.4 KB · ≈ 40 s left";
+    in property <string> detail: "24.1 KB / 57.4 KB";
     in property <string> frames: "312";
     in property <string> throughput: "1.9 KB/s";
-    in property <string> mode-tm: "TM8";
+    in property <string> mode-tm: "TM4";
     /// Share of recent R/P pairs that yield no valid frame.
     in property <string> errors: "—";
     in property <image> preview;
@@ -499,180 +122,225 @@ export component CaptureScreen inherits Rectangle {
     in property <float> guide-height: 1920;
     in property <string> sheet-title: "Receiving";
     callback back();
-    background: Theme.night;
+    background: Theme.black;
 
     VerticalLayout {
-        HorizontalLayout {
-            height: 64px;
-            padding-left: 4px;
-            padding-right: 12px;
-            spacing: 4px;
-            Rectangle {
-                width: 48px;
-                Rectangle {
-                    width: 48px;
-                    height: 48px;
-                    accessible-role: button;
-                    accessible-label: "Back";
-                    Icon { icon-path: Icons.back; tint: Theme.light; }
-                    TouchArea { clicked => { root.back(); } }
-                }
-            }
-            Text { text: "Receive"; font-size: 20px; font-weight: 500; color: Theme.light; vertical-alignment: center; horizontal-stretch: 1; }
-            Segmented { y: 14px; width: 170px; left-label: "Live"; right-label: "Slow-mo"; dark: true; control-height: 36px; choice <=> root.mode; }
+        TopBar {
+            title: "RECEIVE / CAMERA";
+            navigation => { root.back(); }
+            if root.code != "": Tag { y: 16.5px; text: "CODE " + root.code; ground: Theme.blue; }
         }
-
         // Viewfinder: the camera image goes here.
-        Rectangle {
+        HorizontalLayout {
             vertical-stretch: 1;
-            x: 12px;
-            width: parent.width - 24px;
-            border-radius: 20px;
-            background: Theme.night-3;
-            clip: true;
-            property <length> side: min(self.width, self.height) * 0.66;
-            Image {
-                width: parent.width;
-                height: parent.height;
-                source: root.preview;
-                image-fit: cover;
-            }
-            // Grid outlines, laid over the image as "cover" paints it.
-            property <float> scale: max(self.width / 1px / root.guide-width, self.height / 1px / root.guide-height);
-            if root.outline != "": Path {
-                width: root.guide-width * parent.scale * 1px;
-                height: root.guide-height * parent.scale * 1px;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                viewbox-width: root.guide-width;
-                viewbox-height: root.guide-height;
-                commands: root.outline;
-                stroke: root.framing-good ? Theme.green : #f59e0b;
-                stroke-width: 3px;
-                fill: transparent;
-            }
-            if root.outline == "": Rectangle {
-                x: (parent.width - parent.side) / 2;
-                y: (parent.height - parent.side) / 2 - 30px;
-                width: parent.side;
-                height: parent.side;
-                border-width: 3px;
-                border-radius: 4px;
-                border-color: root.framing-good ? Theme.green : #f59e0b;
-            }
-            if root.lock: HorizontalLayout {
-                x: 12px;
-                y: 12px;
-                height: 30px;
-                alignment: start;
-                Badge { text: "White balance + exposure locked"; icon-path: Icons.padlock; badge-background: #0b0d10b8; badge-ink: Theme.light; height: 30px; }
-            }
+            padding: 12px;
             Rectangle {
-                x: 16px;
-                width: parent.width - 32px;
-                y: parent.height - self.height - 16px;
-                height: advice-text.preferred-height + 24px;
-                border-radius: 12px;
-                background: root.framing-good ? #15803deb : #b45309eb;
-                advice-text := Text {
-                    width: parent.width - 32px;
-                    text: root.advice;
-                    font-size: 15px;
-                    font-weight: 500;
-                    color: white;
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
+                background: Theme.panel;
+                clip: true;
+                property <length> side: min(self.width, self.height) * 0.66;
+                Image {
+                    width: parent.width;
+                    height: parent.height;
+                    source: root.preview;
+                    image-fit: cover;
                 }
+                // Grid outlines, laid over the image as "cover" paints it.
+                property <float> scale: max(self.width / 1px / root.guide-width, self.height / 1px / root.guide-height);
+                if root.outline != "": Path {
+                    width: root.guide-width * parent.scale * 1px;
+                    height: root.guide-height * parent.scale * 1px;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    viewbox-width: root.guide-width;
+                    viewbox-height: root.guide-height;
+                    commands: root.outline;
+                    stroke: root.framing-good ? Theme.ok : Theme.warn;
+                    stroke-width: 2px;
+                    fill: transparent;
+                }
+                // No grid seen: the aiming square, dashed.
+                if root.outline == "": Rectangle {
+                    x: (parent.width - parent.side) / 2;
+                    y: (parent.height - parent.side) / 2 - 30px;
+                    width: parent.side;
+                    height: parent.side;
+                    Dashed { tint: Theme.accent; dash: 8px; gap: 6px; }
+                }
+                if root.lock: HorizontalLayout {
+                    x: 10px;
+                    y: 10px;
+                    height: 20px;
+                    alignment: start;
+                    Tag { text: "WHITE BALANCE + EXPOSURE LOCKED"; ground: #010101cc; }
+                }
+                Rectangle {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    y: parent.height - self.height - 10px;
+                    height: advice-text.preferred-height + 20px;
+                    background: #010101d9;
+                    Rectangle { x: 0; width: 3px; background: root.framing-good ? Theme.ok : Theme.warn; }
+                    advice-text := Text {
+                        x: 16px;
+                        width: parent.width - 28px;
+                        text: root.advice;
+                        font-size: 14px;
+                        color: Theme.white;
+                        wrap: word-wrap;
+                    }
+                }
+                Dashed { }
             }
         }
-
         // Bottom sheet: progress.
         Rectangle {
-            border-radius: 28px;
-            background: Theme.night-2;
-            height: sheet.preferred-height + 28px;
+            height: sheet.preferred-height;
             sheet := VerticalLayout {
-                y: 0;
-                padding-left: 20px;
-                padding-right: 20px;
-                padding-top: 12px;
-                padding-bottom: 24px;
-                spacing: 12px;
+                padding: 16px;
+                padding-bottom: 20px;
+                spacing: 10px;
                 HorizontalLayout {
-                    alignment: center;
-                    Rectangle { width: 32px; height: 4px; border-radius: 2px; background: Theme.night-outline; }
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 4px;
+                        Label { text: "STATUS"; }
+                        Text { text: root.sheet-title; font-size: 18px; color: Theme.white; }
+                    }
+                    Text { text: round(root.part * 100) + "%"; font-size: 26px; font-family: Theme.mono; color: Theme.white; vertical-alignment: bottom; }
                 }
-                HorizontalLayout {
-                    spacing: 6px;
-                    Text { text: "Verification code"; font-size: 13px; color: Theme.soft-light; vertical-alignment: center; }
-                    Text { text: root.code; font-size: 15px; font-family: Theme.mono; font-weight: 600; color: Theme.light; vertical-alignment: center; }
-                    Text { text: "· same as sender"; font-size: 13px; color: Theme.soft-light; vertical-alignment: center; }
-                }
-                HorizontalLayout {
-                    Text { text: root.sheet-title; font-size: 18px; font-weight: 600; color: Theme.light; horizontal-stretch: 1; vertical-alignment: center; }
-                    Text { text: round(root.part * 100) + "%"; font-size: 24px; font-family: Theme.mono; color: Theme.light; }
-                }
-                Progress { part: root.part; dark: true; }
-                if root.blocks.length > 1: BlockBars { blocks: root.blocks; control-height: 22px; }
-                Text { text: root.detail; font-size: 13px; font-family: Theme.mono; color: Theme.soft-light; }
+                Progress { part: root.part; }
+                if root.blocks.length > 1: BlockBars { blocks: root.blocks; control-height: 18px; }
+                if root.detail != "": Label { text: root.detail; color: Theme.muted; }
                 HorizontalLayout {
                     spacing: 8px;
-                    Encrypted { tag: "Frames"; value: root.frames; dark: true; horizontal-stretch: 1; }
-                    Encrypted { tag: "Throughput"; value: root.throughput; dark: true; horizontal-stretch: 1; }
-                    Encrypted { tag: "Mode"; value: root.mode-tm; dark: true; horizontal-stretch: 1; }
-                    Encrypted { tag: "Errors"; value: root.errors; dark: true; horizontal-stretch: 1; }
+                    Figure { tag: "FRAMES"; value: root.frames; horizontal-stretch: 1; }
+                    Figure { tag: "THROUGHPUT"; value: root.throughput; horizontal-stretch: 1; }
+                    Figure { tag: "MODE"; value: root.mode-tm; horizontal-stretch: 1; }
+                    Figure { tag: "ERRORS"; value: root.errors; horizontal-stretch: 1; }
                 }
             }
+            Dashed { bottom: false; left: false; right: false; }
         }
     }
 }
 
-// ── Verification code ──────────────────────────────────────────────────────
+// ── Code and verification ──────────────────────────────────────────────────
+/// Steps of the Code screen.
+export enum CodeStep {
+    /// Passphrase path: type the code shown next to the sender's grid.
+    type-code,
+    /// The typed code is being stretched (PBKDF2).
+    checking,
+    /// Compare the 6 digits with the sender's.
+    compare,
+    /// Codes path (ORP v0.2, sender with a camera): show the response grid,
+    /// then read the sender's reveal grid.
+    response,
+}
+
 export component CodeScreen inherits Rectangle {
+    in property <CodeStep> step: CodeStep.compare;
     in property <[string]> digits: ["9", "7", "6", "1", "8", "8"];
     in property <string> code-readable: "976 188";
-    in property <bool> filmed-image: true;
-    in property <string> note: "";
-    /// Strong mode: the RESPONSE code, to show to the sender's camera.
+    in property <string> note: "57.4 KB announced.";
+    in property <string> error: "";
     in property <image> response;
-    in property <bool> has-response: false;
+    in-out property <string> typed-text;
+    callback submit(string);
+    /// Formats the field as the user types (Rust: orp_transfer::code_as_typed).
+    pure callback format-code(string) -> string;
     callback identical();
     callback different();
     callback cancel();
-    background: Theme.background;
+    background: Theme.black;
 
     VerticalLayout {
-        HorizontalLayout {
-            height: 64px;
-            padding-left: 4px;
-            spacing: 4px;
-            Rectangle {
-                width: 48px;
-                Rectangle {
-                    width: 48px;
-                    height: 48px;
-                    accessible-role: button;
-                    accessible-label: "Cancel";
-                    Icon { icon-path: Icons.close; }
-                    TouchArea { clicked => { root.cancel(); } }
-                }
-            }
-            Text { text: "Verify the sender"; font-size: 22px; font-weight: 500; color: Theme.ink; vertical-alignment: center; }
+        TopBar {
+            title: root.step == CodeStep.type-code || root.step == CodeStep.checking ? "RECEIVE / SENDER'S CODE" : "RECEIVE / VERIFY";
+            icon-path: Icons.close;
+            label: "Cancel";
+            navigation => { root.cancel(); }
         }
         VerticalLayout {
-            padding-left: 20px;
-            padding-right: 20px;
-            padding-top: 8px;
-            padding-bottom: 24px;
-            spacing: 20px;
+            padding: 20px;
+            padding-top: 24px;
+            spacing: 18px;
             vertical-stretch: 1;
-            if root.has-response: Text {
-                text: "1. Show this grid to the sender's camera. 2. Compare the code it then displays with this one.";
-                font-size: 15px;
-                color: Theme.soft;
+            Label {
+                accent: true;
+                text: root.step == CodeStep.type-code || root.step == CodeStep.checking ? "01 / TYPE THE CODE"
+                    : root.step == CodeStep.response ? "01 / SHOW THIS GRID" : "02 / COMPARE";
+            }
+            Text {
+                text: root.step == CodeStep.type-code || root.step == CodeStep.checking
+                    ? "Type the 12-character code shown next to the sender's grid."
+                    : root.step == CodeStep.response
+                        ? "Show this grid to the sender's camera, then aim at its screen again: its next grid gives the verification code."
+                        : "The same 6 digits must appear on the sender. If they differ, someone is in the middle: retype or cancel.";
+                font-size: 20px;
+                letter-spacing: -0.4px;
+                color: Theme.white;
                 wrap: word-wrap;
             }
-            if root.has-response: HorizontalLayout {
+            if root.step == CodeStep.type-code || root.step == CodeStep.checking: Rectangle {
+                height: 56px;
+                background: Theme.panel;
+                typed := TextInput {
+                    text <=> root.typed-text;
+                    x: 16px;
+                    width: parent.width - 32px;
+                    vertical-alignment: center;
+                    font-size: 22px;
+                    font-family: Theme.mono;
+                    letter-spacing: 1px;
+                    color: Theme.white;
+                    single-line: true;
+                    input-type: text;
+                    // A code, not a word: no correction, no suggestion, capitals.
+                    // With Slint's defaults (auto-correct, auto-complete) the
+                    // keyboard holds the letters as a COMPOSING word, outside
+                    // `text`, until committed — the dashes could not be placed.
+                    input-method-hints: { capitalization: CapitalizationMode.characters, auto-correct: false, auto-complete: false };
+                    enabled: root.step == CodeStep.type-code;
+                    accessible-role: text-input;
+                    accessible-label: "Code shown by the sender";
+                    accepted => { root.submit(self.text); }
+                    // Dashes placed by themselves (XXXX-XXXX-XXXX), cursor kept at the end.
+                    // (No `let`: Slint 1.18 generates a moved-value error when a
+                    // local string is used twice.)
+                    edited => {
+                        if (root.format-code(self.text) != self.text) {
+                            self.text = root.format-code(self.text);
+                            // The cursor is moved AFTER this callback by the
+                            // insertion itself (old position + 1, the dash not
+                            // counted): it is put at the end once that is done.
+                            cursor-to-end.running = true;
+                        }
+                    }
+                }
+                cursor-to-end := Timer {
+                    interval: 1ms;
+                    running: false;
+                    triggered => {
+                        self.running = false;
+                        typed.set-selection-offsets(typed.text.character-count, typed.text.character-count);
+                    }
+                }
+                // Placeholder only while the field is idle: on Android the
+                // keyboard's COMPOSING text is not in `text` until committed,
+                // so "text is empty" alone left it drawn over the typing.
+                if typed.text == "" && !typed.has-focus: Text {
+                    x: 16px;
+                    text: "XXXX-XXXX-XXXX";
+                    font-size: 22px;
+                    font-family: Theme.mono;
+                    letter-spacing: 1px;
+                    color: Theme.gray;
+                    vertical-alignment: center;
+                }
+                Dashed { tint: typed.has-focus ? Theme.accent : Theme.line-strong; }
+            }
+            if root.step == CodeStep.response: HorizontalLayout {
                 alignment: center;
                 Rectangle {
                     width: min(root.width - 40px, 300px);
@@ -689,233 +357,39 @@ export component CodeScreen inherits Rectangle {
                     }
                 }
             }
-            if !root.has-response: Text {
-                text: "The same code must appear under the sender's grid. If it differs, someone is in the middle: refuse.";
-                font-size: 16px;
-                color: Theme.soft;
-                wrap: word-wrap;
-            }
-            HorizontalLayout {
+            if root.step == CodeStep.compare: HorizontalLayout {
                 alignment: center;
                 spacing: 6px;
                 accessible-role: text;
                 accessible-label: "Verification code " + root.code-readable;
-                for encrypted[i] in root.digits: Rectangle {
-                    width: i == 3 ? 66px : 46px;
+                for digit[i] in root.digits: Rectangle {
+                    width: i == 3 ? 62px : 44px;
                     height: 64px;
                     Rectangle {
-                        x: i == 3 ? 20px : 0;
-                        width: 46px;
+                        x: i == 3 ? 18px : 0;
+                        width: 44px;
                         height: 64px;
-                        border-radius: 12px;
-                        background: Theme.surface;
-                        border-width: 1px;
-                        border-color: Theme.divider;
-                        Text {
-                            text: encrypted;
-                            font-size: 34px;
-                            font-family: Theme.mono;
-                            font-weight: 500;
-                            color: Theme.ink;
-                        }
+                        background: Theme.panel;
+                        Text { text: digit; font-size: 34px; font-family: Theme.mono; color: Theme.accent-text; }
+                        Dashed { tint: Theme.line-strong; }
                     }
                 }
             }
-            if root.note != "": Text {
-                text: root.note;
-                font-size: 14px;
-                color: Theme.soft;
-                wrap: word-wrap;
-            }
-            if root.filmed-image: Rectangle {
-                border-radius: 16px;
-                background: Theme.surface-container;
-                VerticalLayout {
-                    padding: 12px;
-                    spacing: 8px;
-                    Rectangle {
-                        height: 92px;
-                        border-radius: 10px;
-                        background: Theme.night-3;
-                        HorizontalLayout {
-                            alignment: center;
-                            spacing: 10px;
-                            Icon { y: (92px - 20px) / 2; icon-path: Icons.image; size: 20px; tint: #c7cdd6; }
-                            Text { text: "[filmed image: code line]"; font-size: 15px; font-family: Theme.mono; color: #c7cdd6; vertical-alignment: center; }
-                        }
-                    }
-                    Text {
-                        text: "Slow-mo: the sender may no longer be on screen. Compare with the image the video captured under its grid.";
-                        font-size: 13px;
-                        color: Theme.soft;
-                        wrap: word-wrap;
-                    }
-                }
-            }
-            Rectangle { vertical-stretch: 1; }
-            Button { text: "They match, receive"; icon-path: Icons.checked; click => { root.identical(); } }
-            Button { text: "They differ, cancel"; kind: "danger"; click => { root.different(); } }
-        }
-    }
-}
-
-// ── Slow-motion reception ──────────────────────────────────────────────────
-export component SlowMotionScreen inherits Rectangle {
-    in-out property <int> mode: 1;
-    in property <int> step: 1; // 0 film, 1 read, 2 complete
-    in property <float> part: 0.63;
-    in property <string> filmed: "30 s";
-    in property <string> grids: "1";
-    in property <string> frames: "104";
-    in property <string> previous: "";
-    in property <string> reading-title: "Reading the video";
-    in property <string> film-label: "Film";
-    in property <string> reading-help: "The phone analyzes the images, not in real time. You can put it down.";
-    /// Completeness of the file, block by block (empty until the code is read).
-    in property <[BlockView]> blocks: [];
-    in property <string> file-title: "";
-    /// A transfer has started: "Abandon" is offered.
-    in property <bool> in-progress: false;
-    callback back();
-    callback cancel-reading();
-    callback film();
-    callback import-video();
-    callback abort();
-    background: Theme.night;
-
-    VerticalLayout {
-        HorizontalLayout {
-            height: 64px;
-            padding-left: 4px;
-            padding-right: 12px;
-            spacing: 4px;
-            Rectangle {
-                width: 48px;
-                Rectangle {
-                    width: 48px;
-                    height: 48px;
-                    accessible-role: button;
-                    accessible-label: "Back";
-                    Icon { icon-path: Icons.back; tint: Theme.light; }
-                    TouchArea { clicked => { root.back(); } }
-                }
-            }
-            Text { text: "Receive"; font-size: 20px; font-weight: 500; color: Theme.light; vertical-alignment: center; horizontal-stretch: 1; }
-            Segmented { y: 14px; width: 170px; left-label: "Live"; right-label: "Slow-mo"; dark: true; control-height: 36px; choice <=> root.mode; }
-        }
-
-        Flickable {
-          vertical-stretch: 1;
-          content-width: self.width;
-          content-height: slow-motion-content.preferred-height;
-          slow-motion-content := VerticalLayout {
-            x: 0;
-            width: root.width;
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-top: 4px;
-            padding-bottom: 16px;
-            spacing: 14px;
-
-            HorizontalLayout {
-                spacing: 8px;
-                for label[i] in ["1 · Film", "2 · Read video", "3 · Complete"]: VerticalLayout {
-                    spacing: 6px;
-                    horizontal-stretch: 1;
-                    Rectangle { height: 4px; border-radius: 2px; background: i <= root.step ? Theme.light-blue : Theme.night-stroke; }
-                    Text { text: label; font-size: 12px; font-weight: i == root.step ? 600 : 400; color: i == root.step ? Theme.light : Theme.soft-light; }
-                }
-            }
-
-            // Reading of the video.
-            Rectangle {
-                border-radius: 20px;
-                background: Theme.night-2;
-                VerticalLayout {
-                    padding: 18px;
-                    spacing: 12px;
-                    HorizontalLayout {
-                        Text { text: root.reading-title; font-size: 17px; font-weight: 600; color: Theme.light; horizontal-stretch: 1; vertical-alignment: center; }
-                        // Progress of the READING of the video (not of the file).
-                        if root.step == 1: Text { text: round(root.part * 100) + "%"; font-size: 20px; font-family: Theme.mono; color: Theme.light; }
-                    }
-                    if root.step == 1: Progress { part: root.part; dark: true; }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        Encrypted { tag: "Filmed"; value: root.filmed; dark: true; horizontal-stretch: 1; }
-                        Encrypted { tag: "Grids"; value: root.grids; dark: true; horizontal-stretch: 1; }
-                        Encrypted { tag: "Frames"; value: root.frames; dark: true; horizontal-stretch: 1; }
-                    }
-                    Text { text: root.reading-help; font-size: 13px; color: Theme.soft-light; wrap: word-wrap; }
-                    if root.step == 1: HorizontalLayout {
-                        alignment: start;
-                        Button { text: "Cancel reading"; icon-path: Icons.close; kind: "outlined"; control-height: 40px; dark: true; click => { root.cancel-reading(); } }
-                    }
-                }
-            }
-
-            // The file, block by block.
-            if root.blocks.length > 0: Rectangle {
-                border-radius: 20px;
-                background: Theme.night-2;
-                VerticalLayout {
-                    padding: 18px;
-                    spacing: 10px;
-                    HorizontalLayout {
-                        spacing: 8px;
-                        Text { text: "File"; font-size: 17px; font-weight: 600; color: Theme.light; vertical-alignment: center; }
-                        Text { text: root.file-title; font-size: 13px; font-family: Theme.mono; color: Theme.soft-light; horizontal-alignment: right; vertical-alignment: center; horizontal-stretch: 1; }
-                    }
-                    BlockBars { blocks: root.blocks; control-height: 40px; }
-                    HorizontalLayout {
-                        spacing: 14px;
-                        for caption in [
-                            { tint: Theme.green, text: "complete" },
-                            { tint: Theme.light-blue, text: "in progress" },
-                            { tint: Theme.night-stroke, text: "to film" },
-                        ]: HorizontalLayout {
-                            spacing: 6px;
-                            Rectangle { y: 4px; width: 10px; height: 10px; border-radius: 2px; background: caption.tint; }
-                            Text { text: caption.text; font-size: 12px; color: Theme.soft-light; }
-                        }
-                    }
-                }
-            }
-
-            if root.previous != "": Rectangle {
-                border-radius: 16px;
-                background: #1f2a3d;
-                HorizontalLayout {
-                    padding: 16px;
-                    spacing: 12px;
-                    Icon { icon-path: Icons.info; size: 22px; tint: Theme.night-link; }
-                    VerticalLayout {
-                        spacing: 4px;
-                        horizontal-stretch: 1;
-                        Text { text: "Reception progress"; font-size: 14px; font-weight: 600; color: Theme.light; }
-                        Text { text: root.previous; font-size: 13px; color: #c7cdd6; wrap: word-wrap; }
-                    }
-                }
-            }
-          }
-        }
-
-        // Action bar, always visible.
-        Rectangle {
-            background: Theme.night-2;
-            border-top-left-radius: 24px;
-            border-top-right-radius: 24px;
-            VerticalLayout {
-                padding: 16px;
-                padding-bottom: 20px;
+            if root.error != "": HorizontalLayout {
                 spacing: 10px;
-                Button { text: root.film-label; icon-path: Icons.save; active: root.step != 1; dark: true; click => { root.film(); } }
-                HorizontalLayout {
-                    spacing: 10px;
-                    Button { text: "Import a video"; icon-path: Icons.file; kind: "outlined"; control-height: 44px; active: root.step != 1; dark: true; horizontal-stretch: 1; click => { root.import-video(); } }
-                    if root.in-progress: Button { text: "Abandon"; kind: "danger"; control-height: 44px; dark: true; horizontal-stretch: 1; click => { root.abort(); } }
-                }
+                Rectangle { width: 3px; background: Theme.bad; }
+                Text { text: root.error; font-size: 14px; color: Theme.bad; wrap: word-wrap; horizontal-stretch: 1; }
             }
+            if root.note != "": Label { text: root.note; wrap: word-wrap; }
+            Rectangle { vertical-stretch: 1; }
+            if root.step == CodeStep.type-code || root.step == CodeStep.checking: Button {
+                text: root.step == CodeStep.checking ? "CHECKING THE CODE..." : "CONTINUE";
+                active: root.step == CodeStep.type-code;
+                click => { root.submit(root.typed-text); }
+            }
+            if root.step == CodeStep.response: Button { text: "WAITING FOR THE SENDER'S GRID..."; active: false; icon-path: ""; }
+            if root.step == CodeStep.compare: Button { text: "THEY MATCH / RECEIVE"; icon-path: Icons.checked; click => { root.identical(); } }
+            if root.step == CodeStep.compare: Button { text: "THEY DIFFER / RETYPE"; kind: "outline"; icon-path: Icons.back; click => { root.different(); } }
         }
     }
 }
@@ -924,8 +398,8 @@ export component SlowMotionScreen inherits Rectangle {
 export component ReceivedScreen inherits Rectangle {
     in property <string> name: "photo.jpg";
     in property <string> size: "59.7 KB";
-    in property <string> filmed: "30 s · slow-mo";
-    in property <string> mode-tm: "TM8 · 1 grid";
+    in property <string> mode-tm: "TM4";
+    in property <string> message: "";
     in property <image> preview;
     in property <bool> has-preview: false;
     in property <string> text-preview: "No preview for this file type.";
@@ -933,62 +407,33 @@ export component ReceivedScreen inherits Rectangle {
     callback save();
     callback share();
     callback delete();
-    background: Theme.background;
+    background: Theme.black;
 
     VerticalLayout {
-        HorizontalLayout {
-            height: 64px;
-            padding-left: 4px;
-            spacing: 4px;
-            Rectangle {
-                width: 48px;
-                Rectangle {
-                    width: 48px;
-                    height: 48px;
-                    accessible-role: button;
-                    accessible-label: "Close";
-                    Icon { icon-path: Icons.close; }
-                    TouchArea { clicked => { root.close(); } }
-                }
-            }
-            Text { text: "File received"; font-size: 22px; font-weight: 500; color: Theme.ink; vertical-alignment: center; }
-        }
+        TopBar { title: "RECEIVE / FILE"; icon-path: Icons.close; label: "Close"; navigation => { root.close(); } }
         VerticalLayout {
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-top: 8px;
-            padding-bottom: 24px;
-            spacing: 18px;
+            padding: 16px;
+            spacing: 14px;
             vertical-stretch: 1;
-
             Rectangle {
-                border-radius: 16px;
-                background: Theme.ok-pale;
+                background: #4cd98a14;
                 HorizontalLayout {
                     padding: 14px;
-                    padding-left: 16px;
-                    spacing: 14px;
-                    Rectangle {
-                        width: 40px;
-                        height: 40px;
-                        border-radius: 20px;
-                        background: Theme.ok;
-                        Icon { icon-path: Icons.checked; size: 22px; tint: white; thickness: 2.6px; }
-                    }
+                    spacing: 12px;
+                    Icon { icon-path: Icons.checked; size: 22px; tint: Theme.ok; thickness: 2px; }
                     VerticalLayout {
-                        alignment: center;
                         spacing: 2px;
                         horizontal-stretch: 1;
-                        Text { text: "Received and verified"; font-size: 16px; font-weight: 600; color: Theme.ok-ink; }
-                        Text { text: "Fingerprint matches the one announced by the sender."; font-size: 13px; color: #1f5133; wrap: word-wrap; }
+                        Text { text: "Received and verified"; font-size: 16px; color: Theme.ok; }
+                        Text { text: "Fingerprint matches the one announced by the sender."; font-size: 13px; color: Theme.muted; wrap: word-wrap; }
                     }
                 }
+                Dashed { tint: #4cd98a80; }
             }
-
             Rectangle {
-                height: 250px;
-                border-radius: 16px;
-                background: Theme.surface-variant;
+                vertical-stretch: 1;
+                min-height: 160px;
+                background: Theme.panel;
                 clip: true;
                 if root.has-preview: Image {
                     width: parent.width;
@@ -999,107 +444,158 @@ export component ReceivedScreen inherits Rectangle {
                     accessible-label: "Preview of " + root.name;
                 }
                 if !root.has-preview: VerticalLayout {
-                    alignment: center;
-                    spacing: 8px;
-                    HorizontalLayout { alignment: center; Icon { icon-path: Icons.file; size: 40px; tint: Theme.soft; thickness: 1.6px; } }
-                    Text { text: root.text-preview; font-size: 13px; color: Theme.soft; horizontal-alignment: center; }
-                }
-            }
-
-            Rectangle {
-                border-radius: 16px;
-                background: Theme.surface;
-                border-width: 1px;
-                border-color: Theme.divider;
-                GridLayout {
                     padding: 16px;
-                    spacing-horizontal: 16px;
-                    spacing-vertical: 12px;
-                    Row {
-                        Encrypted { tag: "Name"; value: root.name; }
-                        Encrypted { tag: "Size"; value: root.size; }
-                    }
-                    Row {
-                        Encrypted { tag: "Filmed"; value: root.filmed; }
-                        Encrypted { tag: "Mode"; value: root.mode-tm; }
-                    }
+                    alignment: center;
+                    spacing: 10px;
+                    HorizontalLayout { alignment: center; Icon { icon-path: Icons.file; size: 36px; tint: Theme.dim; } }
+                    Text { text: root.text-preview; font-size: 13px; color: Theme.muted; horizontal-alignment: center; wrap: word-wrap; }
                 }
+                Dashed { }
             }
-
-            Text {
-                text: "The file stays in the app's memory until you save it: nothing is opened or imported automatically.";
-                font-size: 13px;
-                color: Theme.soft;
-                wrap: word-wrap;
-            }
-            Rectangle { vertical-stretch: 1; }
-            Button { text: "Save to Downloads"; icon-path: Icons.download; click => { root.save(); } }
             HorizontalLayout {
                 spacing: 12px;
-                Button { text: "Share"; kind: "tonal"; control-height: 48px; horizontal-stretch: 1; click => { root.share(); } }
-                Button { text: "Delete"; kind: "danger"; control-height: 48px; horizontal-stretch: 1; click => { root.delete(); } }
+                Figure { tag: "NAME"; value: root.name; horizontal-stretch: 2; }
+                Figure { tag: "SIZE"; value: root.size; horizontal-stretch: 1; }
+                Figure { tag: "MODE"; value: root.mode-tm; horizontal-stretch: 1; }
+            }
+            Text {
+                text: root.message != "" ? root.message : "The file stays in the app's memory until you save it: nothing is opened or imported automatically.";
+                font-size: 13px;
+                color: root.message != "" ? Theme.accent-text : Theme.dim;
+                wrap: word-wrap;
+            }
+            Button { text: "SAVE TO DOWNLOADS"; icon-path: Icons.download; click => { root.save(); } }
+            HorizontalLayout {
+                spacing: 10px;
+                Button { text: "SHARE"; kind: "outline"; icon-path: Icons.share; horizontal-stretch: 1; click => { root.share(); } }
+                Button { text: "DELETE"; kind: "outline"; icon-path: Icons.trash; horizontal-stretch: 1; click => { root.delete(); } }
             }
         }
     }
 }
 
-// ── Log: what the app did, most recent at the top ─────────────────────────
-export component LogScreen inherits Rectangle {
-    in property <[string]> lines: [];
+// ── Send: file and mode ────────────────────────────────────────────────────
+export component SendScreen inherits Rectangle {
+    in property <string> file-name: "photo.jpg";
+    in property <string> file-detail: "59.7 KB / ~4 min on screen";
+    in property <bool> file-chosen: true;
+    in-out property <int> mode: 0; // 0 TM4, 1 TM8
     callback back();
-    callback clear();
-    background: Theme.background;
+    callback change-file();
+    callback start-transmission();
+    background: Theme.black;
 
     VerticalLayout {
-        HorizontalLayout {
-            height: 64px;
-            padding-left: 4px;
-            padding-right: 8px;
-            spacing: 4px;
-            Rectangle {
-                width: 48px;
-                Rectangle {
-                    width: 48px;
-                    height: 48px;
-                    accessible-role: button;
-                    accessible-label: "Back";
-                    Icon { icon-path: Icons.back; }
-                    TouchArea { clicked => { root.back(); } }
-                }
-            }
-            Text { text: "Log"; font-size: 22px; font-weight: 500; color: Theme.ink; vertical-alignment: center; horizontal-stretch: 1; }
-            Button { y: 12px; text: "Clear"; kind: "text"; control-height: 40px; click => { root.clear(); } }
-        }
-        Separator { }
-        if root.lines.length == 0: Text {
-            text: "Nothing yet: reads, receptions and transmissions are logged here.";
-            font-size: 14px;
-            color: Theme.soft;
-            wrap: word-wrap;
-            x: 16px;
-            width: root.width - 32px;
-            height: 80px;
-            vertical-alignment: center;
-        }
-        Flickable {
+        TopBar { title: "SEND"; navigation => { root.back(); } }
+        VerticalLayout {
+            padding: 16px;
+            padding-top: 20px;
+            spacing: 14px;
             vertical-stretch: 1;
-            content-width: self.width;
-            content-height: log-list.preferred-height;
-            log-list := VerticalLayout {
-                x: 0;
-                width: root.width;
-                padding: 12px;
-                padding-left: 16px;
-                padding-right: 16px;
-                spacing: 8px;
-                for line in root.lines: Text {
-                    text: line;
-                    font-size: 12px;
-                    font-family: Theme.mono;
-                    color: Theme.ink;
+            Label { text: "01 / FILE"; accent: true; }
+            Rectangle {
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 12px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Icon { icon-path: Icons.file; size: 26px; tint: Theme.accent-text; }
+                        VerticalLayout {
+                            spacing: 2px;
+                            horizontal-stretch: 1;
+                            Text { text: root.file-name; font-size: 17px; color: Theme.white; overflow: elide; }
+                            Label { text: root.file-detail; color: Theme.muted; }
+                        }
+                    }
+                    Button { text: root.file-chosen ? "CHANGE FILE" : "CHOOSE A FILE"; kind: "outline"; icon-path: Icons.file; control-height: 40px; click => { root.change-file(); } }
+                }
+                Dashed { }
+            }
+            Label { text: "02 / OPTICAL MODE"; accent: true; }
+            Choice { left-label: "TM4 / ROBUST"; right-label: "TM8 / FAST"; choice <=> root.mode; }
+            Text {
+                text: root.mode == 0
+                    ? "TM4: 4 colours, read by any camera. 250 ms per subframe, like OptiRelay Studio."
+                    : "TM8: 8 colours, twice the data per grid; needs a good camera and a steady hand.";
+                font-size: 13px;
+                color: Theme.dim;
+                wrap: word-wrap;
+            }
+            Rule { }
+            HorizontalLayout {
+                spacing: 12px;
+                Icon { icon-path: Icons.padlock; size: 20px; tint: Theme.accent-text; }
+                Text {
+                    text: "A one-time 12-character code is drawn for each sending and shown next to the grid. The receiver types it; the frames are encrypted with it (AES-GCM).";
+                    font-size: 13px;
+                    color: Theme.muted;
                     wrap: word-wrap;
+                    horizontal-stretch: 1;
                 }
             }
+            Rectangle { vertical-stretch: 1; }
+            Button {
+                text: root.file-chosen ? "START TRANSMITTING" : "CHOOSE A FILE";
+                icon-path: root.file-chosen ? Icons.arrow : Icons.file;
+                click => { if root.file-chosen { root.start-transmission(); } else { root.change-file(); } }
+            }
+        }
+    }
+}
+
+// ── Transmission: the grid, the code as text next to it ───────────────────
+export component SendingScreen inherits Rectangle {
+    in property <image> grid;
+    in property <string> code: "K7QF-M2XP-9CHR";
+    in property <string> sas: "976 188";
+    in property <string> hud: "";
+    callback stop();
+    background: Theme.black;
+
+    VerticalLayout {
+        TopBar { title: "SEND / TRANSMITTING"; icon-path: Icons.close; label: "Stop transmitting"; navigation => { root.stop(); } }
+        // The grid, white, as large as possible.
+        Rectangle {
+            height: self.width;
+            background: white;
+            // Scale 1: the grid is rendered at a whole number of physical
+            // pixels per module (send.rs) — no resampling, all modules the
+            // same width. Shrunk only if it overflows.
+            Image {
+                width: min(parent.width, root.grid.width * 1phx);
+                height: min(parent.height, root.grid.height * 1phx);
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                source: root.grid;
+                image-fit: contain;
+                image-rendering: pixelated;
+                accessible-role: image;
+                accessible-label: "Optical grid being transmitted";
+            }
+        }
+        // The code, as TEXT next to the grid — never inside it.
+        VerticalLayout {
+            padding: 16px;
+            spacing: 10px;
+            vertical-stretch: 1;
+            Label { text: "CODE / TYPE IT ON THE RECEIVER"; accent: true; }
+            Text {
+                text: root.code;
+                font-size: 30px;
+                font-family: Theme.mono;
+                letter-spacing: 1px;
+                color: Theme.white;
+                accessible-label: "Code " + root.code;
+            }
+            Rule { }
+            HorizontalLayout {
+                spacing: 12px;
+                Label { text: "VERIFICATION"; vertical-alignment: center; horizontal-stretch: 1; }
+                Text { text: root.sas; font-size: 24px; font-family: Theme.mono; color: Theme.accent-text; }
+            }
+            Label { text: root.hud; wrap: word-wrap; }
+            Rectangle { vertical-stretch: 1; }
+            Button { text: "STOP"; kind: "outline"; icon-path: Icons.close; click => { root.stop(); } }
         }
     }
 }

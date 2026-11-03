@@ -17,6 +17,7 @@ extern "C" {}
 pub struct CameraImage<'a> {
     pub width: usize,
     pub height: usize,
+    #[allow(dead_code)] // sensor timestamp (ns), kept for diagnostics
     pub instant_ns: i64,
     /// Sensor orientation (degrees): 90 on a phone held upright.
     pub orientation: i32,

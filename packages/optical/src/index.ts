@@ -41,6 +41,7 @@ export {
   decodeWithAffine,
   detectFinders,
   chooseTriplet,
+  chooseTriplets,
   affineFromTriplet,
   applyAffine,
   luminance,

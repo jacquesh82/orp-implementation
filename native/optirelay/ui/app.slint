@@ -1,80 +1,34 @@
-// OptiRelay — main window: destinations (bottom bar), side menu,
-// task screens (receiving, code, slow motion, received) and the BACK key.
+// OptiRelay — main window: home (Receive / Send), task screens and the
+// BACK key. Two functions only; security built in (one-time code, SAS).
 
-import { Theme, Icons } from "theme.slint";
-import { Icon, AppBar, Badge, BottomNav, Separator, BlockView } from "components.slint";
-import { ReceiveScreen, SendScreen, BenchScreen, CaptureScreen, CodeScreen, SlowMotionScreen, ReceivedScreen, SendingScreen, LogScreen, CalibrationTrial, MeasurementRow } from "screens.slint";
+import { Theme } from "theme.slint";
+import { BlockView } from "components.slint";
+import { HomeScreen, CaptureScreen, CodeScreen, CodeStep, ReceivedScreen, SendScreen, SendingScreen } from "screens.slint";
 
-export { CalibrationTrial, MeasurementRow, BlockView }
+export { BlockView, CodeStep }
 
-// Task screens, on top of the destinations.
-export enum Screen { home, capture, code, slow-motion, received, sending, log }
-
-component MenuItem inherits Rectangle {
-    in property <string> label;
-    in property <string> icon-path;
-    in property <bool> selected: false;
-    callback click();
-    height: 56px;
-    border-radius: 28px;
-    background: selected ? Theme.primary-container : zone.pressed ? #1014180d : transparent;
-    accessible-role: button;
-    accessible-label: label;
-    HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 16px;
-        spacing: 12px;
-        Icon { y: 16px; icon-path: root.icon-path; tint: root.selected ? Theme.on-primary-container : Theme.ink; }
-        Text {
-            text: root.label;
-            font-size: 15px;
-            font-weight: root.selected ? 600 : 500;
-            color: root.selected ? Theme.on-primary-container : Theme.ink;
-            vertical-alignment: center;
-        }
-    }
-    zone := TouchArea { clicked => { root.click(); } }
-}
+export enum Screen { home, capture, code, received, send, sending }
 
 export component App inherits Window {
     title: "OptiRelay";
     preferred-width: 390px;
     preferred-height: 844px;
-    // Dark receiving screens, all the way under the system bars.
-    property <bool> dark: root.screen == Screen.capture || root.screen == Screen.slow-motion || root.screen == Screen.sending;
-    background: root.dark ? Theme.night : Theme.background;
-    default-font-size: 16px;
+    background: Theme.black;
+    default-font-family: Theme.sans;
+    default-font-size: 15px;
 
     in-out property <Screen> screen: Screen.home;
-    in-out property <int> current-tab: 0; // 0 Receive, 1 Send, 2 Test bench
-    in-out property <bool> menu-open: false;
-    in-out property <int> receive-mode: 0; // 0 live, 1 slow motion
 
-    /// Message of the last shot / of the last reading (slow-motion screen).
-    in-out property <string> slow-motion-message: "";
-    // Reading of the video (slow-motion screen).
-    in-out property <float> slow-motion-share: 0;
-    in-out property <int> slow-motion-step: 0;
-    in-out property <string> slow-motion-title: "Reading the video";
-    in-out property <string> slow-motion-help: "Film the transmission; the app reads the video afterwards, not in real time.";
-    in-out property <string> slow-motion-filmed: "—";
-    in-out property <string> slow-motion-grids: "—";
-    in-out property <string> slow-motion-frames: "—";
-    /// Continuation of a transfer: advised duration (s), 0 if there is no continuation.
-    in-out property <int> slow-motion-next: 0;
     /// Completeness of the file in progress, block by block.
     in-out property <[BlockView]> block-view: [];
-    in-out property <string> file-title: "";
-    callback import-video();
-    /// Transfer started, to be completed (Receive tab).
-    in-out property <string> receive-info: "";
-    callback abort-transfer();
-    // Verification code.
+    // Code and verification.
+    in-out property <CodeStep> code-step: CodeStep.type-code;
     in-out property <[string]> code-digits: ["–", "–", "–", "–", "–", "–"];
     in-out property <string> code-readable: "";
     in-out property <string> code-note: "";
+    in-out property <string> code-error: "";
+    in-out property <string> code-typed: "";
     in-out property <image> response-code;
-    in-out property <bool> code-has-response: false;
     // Live reception (camera).
     in-out property <image> camera-preview;
     in-out property <string> capture-advice: "Aim at the screen: keep the three large corner squares in the frame.";
@@ -95,87 +49,49 @@ export component App inherits Window {
     // Received file.
     in-out property <string> received-name: "";
     in-out property <string> received-size: "";
-    in-out property <string> received-filmed: "";
     in-out property <string> received-mode: "";
+    in-out property <string> received-message: "";
     in-out property <image> received-preview;
     in-out property <bool> received-has-preview: false;
     in-out property <string> received-text-preview: "";
-
     // Sending.
     in-out property <string> send-name: "No file selected";
     in-out property <string> send-detail: "An image, a text, a small document";
     in-out property <bool> send-chosen: false;
-    in-out property <string> send-mode: "TM8 · fast";
-    in-out property <string> send-grids: "1 grid";
-    in-out property <string> send-subframe: "100 ms — readable live";
-    in-out property <bool> send-calibrated: false;
+    in-out property <int> send-mode: 0; // 0 TM4, 1 TM8
     in-out property <image> sending-grid;
-    in-out property <string> sending-code: "— —";
-    in-out property <string> sending-count: "";
+    in-out property <string> sending-code: "";
+    in-out property <string> sending-sas: "";
     in-out property <string> sending-hud: "";
-    // Test bench: calibration.
-    in-out property <[CalibrationTrial]> bench-trials: [];
-    in-out property <string> bench-recommendation: "";
-    in-out property <string> bench-code: "";
-    in-out property <string> bench-state: "On the sending screen: test bench › Diagnostics › “Send the calibration series”. Then film it here, during the countdown.";
-    in-out property <[string]> log-lines: [];
-    callback clear-log();
-    in-out property <int> bench-tab: 0;
-    in-out property <string> test-state: "";
-    in-out property <[MeasurementRow]> test-measurements: [];
-    in-out property <string> test-result: "";
-    in-out property <bool> test-ok: false;
-    in-out property <int> test-size: 1;
-    callback film-test();
-    callback send-test();
-    callback film-calibration();
-    callback apply-calibration();
-    callback choose-file();
-    callback configure-send(int);
-    callback start-sending();
 
+    callback choose-file();
+    callback send-mode-changed();
+    changed send-mode => { root.send-mode-changed(); }
+    callback start-sending();
+    /// Passphrase path: the code typed by the user (shown by the sender).
+    callback submit-code(string);
+    pure callback format-code(string) -> string;
     callback confirm-code();
-    callback reject-code();
-    callback cancel-reading();
+    /// Verification codes differ: type the code again.
+    callback retype-code();
     callback save();
     callback share();
     callback delete();
-    /// The current screen changes (the camera opens or closes).
+    /// The current screen changes (the camera opens or closes, the
+    /// transmission stops).
     callback screen-change(Screen);
     changed screen => { root.screen-change(root.screen); }
-
     callback quit();
-    /// Slow-motion shooting requested (Android: high-speed camera screen).
-    callback film();
-    /// Dark or light screen: the system bar icons follow.
-    callback dark-bars(bool);
-    changed dark => { root.dark-bars(root.dark); }
 
-    // BACK key (Android) or Escape (desktop): menu, task screen,
-    // secondary destination, then quit — like an Android app.
+    // BACK key (Android) or Escape (desktop): task screen, then quit.
     public function back() {
-        if root.menu-open {
-            root.menu-open = false;
+        if root.screen == Screen.sending {
+            root.screen = Screen.send;
         } else if root.screen != Screen.home {
             root.screen = Screen.home;
-        } else if root.current-tab != 0 {
-            root.current-tab = 0;
         } else {
             root.quit();
         }
-    }
-
-    function go(index: int) {
-        root.menu-open = false;
-        root.screen = Screen.home;
-        root.current-tab = index;
-    }
-
-    // Strip under the system navigation bar: color of what touches it.
-    Rectangle {
-        y: parent.height - root.safe-area-insets.bottom;
-        height: root.safe-area-insets.bottom;
-        background: root.dark ? Theme.night : root.screen == Screen.home ? Theme.surface-container : Theme.background;
     }
 
     // All content in the safe area: nothing under the status bar or under
@@ -193,68 +109,21 @@ export component App inherits Window {
             reject
         }
 
-        // ── Destinations ────────────────────────────────────────────────────
-        if root.screen == Screen.home: VerticalLayout {
-            AppBar {
-                title: root.current-tab == 0 ? "Receive" : root.current-tab == 1 ? "Send" : "Test bench";
-                navigation => { root.menu-open = true; }
-                if root.current-tab == 0: Badge { y: 16px; text: "Offline"; }
-            }
-            if root.current-tab == 0: ReceiveScreen {
-                vertical-stretch: 1;
-                mode <=> root.receive-mode;
-                info: root.receive-info;
-                blocks: root.block-view;
-                abort => { root.abort-transfer(); }
-                open-camera => { root.screen = Screen.capture; }
-                film => { root.film(); }
-            }
-            if root.current-tab == 1: SendScreen {
-                vertical-stretch: 1;
-                file-name: root.send-name;
-                file-detail: root.send-detail;
-                file-chosen: root.send-chosen;
-                optical-mode: root.send-mode;
-                grids: root.send-grids;
-                subframe: root.send-subframe;
-                calibrated: root.send-calibrated;
-                change-file => { root.choose-file(); }
-                set(i) => { root.configure-send(i); }
-                start-transmission => { root.start-sending(); }
-            }
-            if root.current-tab == 2: BenchScreen {
-                vertical-stretch: 1;
-                trials: root.bench-trials;
-                recommendation: root.bench-recommendation;
-                code-calibration: root.bench-code;
-                state: root.bench-state;
-                bench-tab <=> root.bench-tab;
-                test-state: root.test-state;
-                test-measurements: root.test-measurements;
-                test-result: root.test-result;
-                test-ok: root.test-ok;
-                test-size <=> root.test-size;
-                film-test => { root.film-test(); }
-                send-test => { root.send-test(); }
-                film-series => { root.film-calibration(); }
-                apply => { root.apply-calibration(); }
-            }
-            BottomNav {
-                current-tab: root.current-tab;
-                choose(i) => { root.go(i); }
+        if root.screen == Screen.home: HomeScreen {
+            receive => { root.screen = Screen.capture; }
+            send => {
+                root.screen = Screen.send;
+                if !root.send-chosen { root.choose-file(); }
             }
         }
-
-        // ── Task screens ────────────────────────────────────────────────────
         if root.screen == Screen.capture: CaptureScreen {
-            mode <=> root.receive-mode;
             preview: root.camera-preview;
             advice: root.capture-advice;
             framing-good: root.capture-good;
             lock: root.capture-lock;
             blocks: root.block-view;
             outline: root.capture-outline;
-            code: root.code-readable == "" ? "— —" : root.code-readable;
+            code: root.code-readable;
             part: root.capture-part;
             sheet-title: root.capture-title;
             detail: root.capture-detail;
@@ -267,53 +136,24 @@ export component App inherits Window {
             back => { root.back(); }
         }
         if root.screen == Screen.code: CodeScreen {
+            step: root.code-step;
             digits: root.code-digits;
             code-readable: root.code-readable;
-            filmed-image: false;
             note: root.code-note;
+            error: root.code-error;
+            typed-text <=> root.code-typed;
             response: root.response-code;
-            has-response: root.code-has-response;
+            submit(text) => { root.submit-code(text); }
+            format-code(text) => { return root.format-code(text); }
             identical => { root.confirm-code(); }
-            different => { root.reject-code(); }
-            cancel => { root.reject-code(); }
-        }
-        if root.screen == Screen.slow-motion: SlowMotionScreen {
-            mode <=> root.receive-mode;
-            previous: root.slow-motion-message;
-            part: root.slow-motion-share;
-            step: root.slow-motion-step;
-            reading-title: root.slow-motion-title;
-            reading-help: root.slow-motion-help;
-            filmed: root.slow-motion-filmed;
-            grids: root.slow-motion-grids;
-            frames: root.slow-motion-frames;
-            film-label: root.slow-motion-next > 0 ? "Film the rest · ≈ " + root.slow-motion-next + " s" : "Film";
-            blocks: root.block-view;
-            file-title: root.file-title;
-            in-progress: root.receive-info != "" || root.block-view.length > 0;
-            import-video => { root.import-video(); }
-            abort => { root.abort-transfer(); }
-            film => { root.film(); }
-            cancel-reading => { root.cancel-reading(); }
-            back => { root.back(); }
-        }
-        if root.screen == Screen.log: LogScreen {
-            lines: root.log-lines;
-            back => { root.back(); }
-            clear => { root.clear-log(); }
-        }
-        if root.screen == Screen.sending: SendingScreen {
-            grid: root.sending-grid;
-            code: root.sending-code;
-            count: root.sending-count;
-            hud: root.sending-hud;
-            stop => { root.back(); }
+            different => { root.retype-code(); }
+            cancel => { root.back(); }
         }
         if root.screen == Screen.received: ReceivedScreen {
             name: root.received-name;
             size: root.received-size;
-            filmed: root.received-filmed;
             mode-tm: root.received-mode;
+            message: root.received-message;
             preview: root.received-preview;
             has-preview: root.received-has-preview;
             text-preview: root.received-text-preview;
@@ -322,61 +162,21 @@ export component App inherits Window {
             share => { root.share(); }
             delete => { root.delete(); }
         }
-
-        // ── Side menu (modal drawer, Material 3) ────────────────────────────
-        if root.menu-open: Rectangle {
-            background: #00000052;
-            TouchArea { clicked => { root.menu-open = false; } }
-            Rectangle {
-                x: 0;
-                width: min(320px, parent.width * 0.85);
-                background: Theme.surface;
-                border-top-right-radius: 16px;
-                border-bottom-right-radius: 16px;
-                TouchArea { } // the scrim does not close when the menu is touched
-                VerticalLayout {
-                    padding: 12px;
-                    spacing: 2px;
-                    HorizontalLayout {
-                        padding: 16px;
-                        padding-bottom: 20px;
-                        spacing: 10px;
-                        Rectangle {
-                            width: 28px;
-                            height: 28px;
-                            Rectangle { x: 1px; y: 1px; width: 11px; height: 11px; border-width: 2px; border-color: Theme.ink; }
-                            Rectangle { x: 16px; y: 1px; width: 11px; height: 11px; border-width: 2px; border-color: Theme.ink; }
-                            Rectangle { x: 1px; y: 16px; width: 11px; height: 11px; border-width: 2px; border-color: Theme.ink; }
-                            Rectangle { x: 18px; y: 18px; width: 7px; height: 7px; background: Theme.primary; }
-                        }
-                        Text { text: "OptiRelay"; font-size: 20px; font-weight: 600; color: Theme.ink; vertical-alignment: center; }
-                    }
-                    MenuItem { label: "Receive"; icon-path: Icons.camera; selected: root.current-tab == 0 && root.screen == Screen.home; click => { root.go(0); } }
-                    MenuItem { label: "Send"; icon-path: Icons.screen; selected: root.current-tab == 1 && root.screen == Screen.home; click => { root.go(1); } }
-                    MenuItem { label: "Test bench"; icon-path: Icons.bench; selected: root.current-tab == 2 && root.screen == Screen.home; click => { root.go(2); } }
-                    Separator { }
-                    Text { text: "Tools"; font-size: 13px; font-weight: 600; color: Theme.soft; height: 40px; vertical-alignment: center; x: 16px; }
-                    MenuItem { label: "Calibrate this device pair"; icon-path: Icons.settings; click => { root.go(2); } }
-                    MenuItem {
-                        label: "Log";
-                        icon-path: Icons.log;
-                        selected: root.screen == Screen.log;
-                        click => {
-                            root.menu-open = false;
-                            root.screen = Screen.log;
-                        }
-                    }
-                    Rectangle { vertical-stretch: 1; }
-                    VerticalLayout {
-                        padding: 16px;
-                        spacing: 6px;
-                        HorizontalLayout { alignment: start; Badge { text: "Works offline"; height: 28px; } }
-                        Text { text: "No telemetry"; font-size: 13px; color: Theme.soft; }
-                        Text { text: "Nothing is imported without your consent"; font-size: 13px; color: Theme.soft; }
-                        Text { text: "ORP v0.1 · TM4/TM8"; font-size: 13px; font-family: Theme.mono; color: Theme.soft; }
-                    }
-                }
-            }
+        if root.screen == Screen.send: SendScreen {
+            file-name: root.send-name;
+            file-detail: root.send-detail;
+            file-chosen: root.send-chosen;
+            mode <=> root.send-mode;
+            back => { root.back(); }
+            change-file => { root.choose-file(); }
+            start-transmission => { root.start-sending(); }
+        }
+        if root.screen == Screen.sending: SendingScreen {
+            grid: root.sending-grid;
+            code: root.sending-code;
+            sas: root.sending-sas;
+            hud: root.sending-hud;
+            stop => { root.back(); }
         }
     }
 

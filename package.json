@@ -11,10 +11,12 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/optical --noEmit && tsc -p packages/browser --noEmit && tsc -p packages/elements --noEmit",
-    "demonstrateur": "node packages/core/recette/demonstrateur-node.mjs"
+    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/optical --noEmit && tsc -p packages/browser --noEmit && tsc -p packages/elements --noEmit && tsc -p examples --noEmit && pnpm --filter @optirelay/example-studio check",
+    "demonstrateur": "node packages/core/recette/demonstrateur-node.mjs",
+    "build:packages": "node scripts/build-packages.mjs"
   },
   "devDependencies": {
+    "esbuild": "0.21.5",
     "typescript": "5.6.3",
     "vitest": "^2.1.0"
   }

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OptiRelay — Secure Hello world</title>
+  </head>
+  <body>
+    <main>
+      <h1>OptiRelay — Secure Hello world</h1>
+      <p class="soft">
+        Same transfer as Hello world, but the receiver cannot read anything until someone types the
+        <b>code shown on the sender</b>. The code never travels in the animated image: filming the screen is not enough.
+      </p>
+
+      <section class="card" id="choice">
+        <label class="soft" for="text">Message to send</label>
+        <div class="row"><input id="text" value="Hello world — for your eyes only" maxlength="500" /></div>
+        <div class="row">
+          <button type="button" class="primary" id="send">Send</button>
+          <button type="button" id="receive">Receive</button>
+        </div>
+      </section>
+
+      <section class="card" id="sender" hidden>
+        <p class="soft">Code to type on the receiving device:</p>
+        <p class="big" id="secret" aria-live="polite">····-····-····</p>
+        <p class="soft">Verification code, the receiver must show the same: <b class="big" id="sender-sas">— —</b></p>
+        <canvas class="grid" id="code" aria-label="Animated code carrying the encrypted message"></canvas>
+        <div class="row"><button type="button" id="stop">Stop</button></div>
+      </section>
+
+      <section class="card" id="receiver" hidden>
+        <video id="camera" playsinline muted></video>
+        <p class="status" id="reading" aria-live="polite">Aim at the sender's screen…</p>
+
+        <form class="row" id="code-form" hidden>
+          <input id="code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-label="Code shown on the sender" />
+          <button type="submit" class="primary">Unlock</button>
+        </form>
+
+        <div id="compare" hidden>
+          <p>Verification code: <b class="big" id="receiver-sas">— —</b></p>
+          <p class="soft">It must match the one on the sender.</p>
+          <div class="row">
+            <button type="button" class="primary" id="match">Match, receive</button>
+            <button type="button" id="mismatch">Different</button>
+          </div>
+        </div>
+
+        <p class="message" id="message" hidden></p>
+      </section>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

@@ -1,7 +1,8 @@
 //! Replays a real video (decoded by ffmpeg) through the native pipeline:
-//! `cargo run --release -p orp-transfer --example replay -- <video.mp4> [--all-images]`
-//! (`--all-images` analyzes every image.) The verification code is confirmed
-//! automatically (bench: known passphrase).
+//! `cargo run --release -p orp-transfer --example replay -- <video.mp4> [--code XXXX-XXXX-XXXX] [--all-images]`
+//! (`--all-images` analyzes every image; `--code`: the code the sender
+//! showed, typed as on the phone.) The verification code is confirmed
+//! automatically.
 
 use orp_optics::render::ImageRGBA;
 use orp_transfer::{Event, AdaptiveReader, Receiver};
@@ -13,6 +14,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let video = args.get(1).expect("video path");
     let every_image = args.iter().any(|a| a == "--all-images");
+    let code = args.iter().position(|a| a == "--code").and_then(|i| args.get(i + 1)).cloned();
     let output = Command::new("ffprobe")
         .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate", "-of", "csv=p=0", video])
         .output()
@@ -52,9 +54,30 @@ fn main() {
             let Some(frame) = r.frame.filter(|t| t.is_new) else { continue };
             for e in receiver.process(&frame.bytes).expect("reception") {
                 match e {
-                    Event::CodeRead { sas, stream_size, .. } => {
+                    // Codes path: the SAS only comes with the sender's reveal
+                    // code (which a recorded video may not contain).
+                    Event::CodeRead { sas: None, stream_size, by_passphrase: false, .. } => {
                         code_t = Some(t);
-                        println!("code read at {t:.2} s: {stream_size} B, code {sas} — confirmed automatically");
+                        println!("code read at {t:.2} s: {stream_size} B, codes path — waiting for the reveal code");
+                    }
+                    Event::CodeRead { sas: None, stream_size, by_passphrase: true, .. } => {
+                        code_t = Some(t);
+                        let Some(code) = &code else {
+                            println!("code read at {t:.2} s: {stream_size} B, passphrase path — give the sender's code with --code");
+                            continue;
+                        };
+                        let sas = receiver.pair_with_passphrase(code).expect("pairing");
+                        println!("verification code {sas} at {t:.2} s — confirmed automatically");
+                        for e in receiver.confirm().expect("confirmation") {
+                            if let Event::File(f) = e {
+                                finished_at = Some(t);
+                                println!("FILE {} ({} B, {})", f.name, f.data.len(), f.mime_type);
+                            }
+                        }
+                    }
+                    Event::CodeRead { sas: Some(sas), .. } | Event::RevealRead { sas } => {
+                        code_t.get_or_insert(t);
+                        println!("verification code {sas} at {t:.2} s — confirmed automatically");
                         for e in receiver.confirm().expect("confirmation") {
                             if let Event::File(f) = e {
                                 finished_at = Some(t);
@@ -68,6 +91,7 @@ fn main() {
                     }
                     Event::Rejected => println!("REJECTED: wrong digest"),
                     Event::NewSending => println!("new sending at {t:.2} s"),
+                    Event::WrongCode => println!("WRONG CODE: the frames do not authenticate with --code"),
                     Event::Progress { .. } => {}
                 }
             }

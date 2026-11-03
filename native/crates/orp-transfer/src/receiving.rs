@@ -1,17 +1,31 @@
-//! Reception of a file (apps/web/src/main.ts, trameRecue): init code,
-//! pairing (bench passphrase, or response code to show), frames held until
-//! the code is confirmed, detection of a new sending, verified file.
+//! Reception of a file (examples/studio live.ts, apps/web trameRecue): init
+//! code, pairing (passphrase path: the code shown by the sender, TYPED here;
+//! or — ORP v0.2 codes path — response code to show, then the sender's
+//! reveal code to read), frames held until the code is confirmed, detection
+//! of a new sending, verified file.
 
-use crate::pairing::{pairing_payload, is_pairing_frame, BENCH_PASSPHRASE};
+use crate::pairing::{pairing_code, is_pairing_frame, typed_passphrase};
 use crate::file::{unpack, TransferredFile};
-use orp_core::pairing::{read_init_code, InitCodeInfo, INIT_CODE_SIZE};
-use orp_core::session::{ReceiverSession, FrameStatus};
+use orp_core::pairing::{read_init_code, InitCodeInfo, PairingCodeKind};
+use orp_core::session::{ReceiverSession, FrameStatus, Rejection};
+
+/// Data frames refused as FORGED (authentication fails) before any is
+/// accepted: the typed code is not the sender's — ask for it again (same
+/// threshold as OptiRelay Studio).
+pub const WRONG_CODE_REJECTIONS: u64 = 3;
 use orp_core::{CryptoRust, OrpError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReceivePhase {
     /// Waiting for the init code.
     Code,
+    /// Passphrase path: init code read, waiting for the code shown by the
+    /// sender, typed by the user (frames set aside). No verification code yet.
+    Passphrase,
+    /// Codes path: the response code is shown to the sender's camera; the
+    /// camera stays on the sender, waiting for its REVEAL code (frames set
+    /// aside). No verification code yet.
+    Reveal,
     /// Code read, verification code to compare (frames set aside).
     Verification,
     /// Receiving the data.
@@ -22,8 +36,15 @@ pub enum ReceivePhase {
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    /// Init code read: verification code to compare with the sender.
-    CodeRead { sas: String, stream_size: u64, by_passphrase: bool, response_code: Option<Vec<u8>> },
+    /// Init code read. Passphrase path (`by_passphrase`): no SAS yet — the
+    /// user types the code shown by the sender (`pair_with_passphrase`), which
+    /// gives the verification code. Codes path: no SAS yet either —
+    /// `response_code` is to show to the sender's camera, then the sender's
+    /// reveal code to read (`RevealRead`).
+    CodeRead { sas: Option<String>, stream_size: u64, by_passphrase: bool, response_code: Option<Vec<u8>> },
+    /// Codes path: the sender's reveal code was read and opens the commitment
+    /// of its init code — verification code to compare with the sender.
+    RevealRead { sas: String },
     /// A new frame was accepted.
     Progress { symbols: usize, k_total: u32, accepted: u64 },
     /// File complete, digest verified.
@@ -32,6 +53,11 @@ pub enum Event {
     Rejected,
     /// Another init code: the sender started a new sending.
     NewSending,
+    /// Passphrase path: the frames do not authenticate with the typed code
+    /// (`WRONG_CODE_REJECTIONS` forged in a row, none accepted) — it is not
+    /// the sender's. Back to `Passphrase`: type it again; the refused frames
+    /// are set aside for the next attempt.
+    WrongCode,
 }
 
 pub struct Receiver {
@@ -46,6 +72,13 @@ pub struct Receiver {
     /// Session id of a sending ALREADY received: ignored, so as not to
     /// receive the same file twice if the sender keeps going.
     already_received: Option<Vec<u8>>,
+    /// Codes path: a reveal code was refused (it does not open the
+    /// commitment of the init code — someone in the middle, or another
+    /// sending). Counted for the screen; the wait goes on.
+    pub refused_reveals: u64,
+    /// Passphrase path: frames refused as forged since the confirmation, kept
+    /// to be replayed if the code is typed again.
+    refused: Vec<Vec<u8>>,
 }
 
 impl Default for Receiver {
@@ -65,6 +98,8 @@ impl Receiver {
             frames_read: 0,
             accepted: 0,
             already_received: None,
+            refused_reveals: 0,
+            refused: Vec::new(),
         }
     }
 
@@ -72,8 +107,8 @@ impl Receiver {
     /// (the sender may still be showing it).
     pub fn next(&self) -> Self {
         let mut r = Self::new();
-        r.already_received = match (self.phase, &self.init_code) {
-            (ReceivePhase::Finished, Some(code)) => Some(code[..16.min(code.len())].to_vec()),
+        r.already_received = match (self.phase, &self.info) {
+            (ReceivePhase::Finished, Some(info)) => Some(info.session_id.clone()),
             _ => self.already_received.clone(),
         };
         r
@@ -83,76 +118,124 @@ impl Receiver {
         &self.session
     }
 
-    /// A NEW valid frame out of the optical pipeline.
+    /// A NEW valid frame out of the optical pipeline. A pairing frame on the
+    /// sender's screen may be its init code or (codes path) its reveal code:
+    /// dispatched on the kind byte.
     pub fn process(&mut self, bytes: &[u8]) -> Result<Vec<Event>, OrpError> {
         let pairing = is_pairing_frame(bytes);
         if !pairing {
             self.frames_read += 1;
         }
+        let code = if pairing { pairing_code(bytes) } else { None };
         let mut events = Vec::new();
-        match self.phase {
-            ReceivePhase::Code => {
-                if let Some(code) = pairing_payload(bytes, INIT_CODE_SIZE) {
-                    if self.already_received.as_deref().is_some_and(|id| code.starts_with(id)) {
-                        return Ok(events); // sending already received
+        match (self.phase, code) {
+            (ReceivePhase::Code, Some((PairingCodeKind::Init, code))) => {
+                if self.already_received.as_deref().is_some_and(|id| session_id(&code) == id) {
+                    return Ok(events); // sending already received
+                }
+                events.push(self.read_code(code)?);
+            }
+            (ReceivePhase::Reveal, Some((PairingCodeKind::Reveal, code))) => {
+                // Another session's reveal, or one that does not open the
+                // commitment: refused, the wait goes on.
+                match self.session.receive_reveal_code(&code) {
+                    Ok(()) => {
+                        self.phase = ReceivePhase::Verification;
+                        events.push(Event::RevealRead { sas: self.session.sas()? });
                     }
-                    events.push(self.read_code(code)?);
-                } else if !pairing && self.pending.len() < 20_000 {
-                    // Frames of a video filmed before the code: replayed later.
+                    Err(_) => self.refused_reveals += 1,
+                }
+            }
+            // Another init code while pairing, receiving or done: only ANOTHER
+            // sending restarts a reception (the same sending coming round has
+            // no effect). During the comparison of the codes, nothing changes.
+            (
+                ReceivePhase::Passphrase | ReceivePhase::Reveal | ReceivePhase::Data | ReceivePhase::Finished,
+                Some((PairingCodeKind::Init, code)),
+            ) => {
+                if self.init_code.as_deref().is_some_and(|current| other_sending(&code, current)) {
+                    *self = self.next();
+                    events.push(Event::NewSending);
+                    events.extend(self.process(bytes)?);
+                }
+            }
+            (ReceivePhase::Data, None) if !pairing => events.extend(self.data_frame(bytes)?),
+            // Frames of a video filmed before the pairing ends: replayed later.
+            (ReceivePhase::Code | ReceivePhase::Passphrase | ReceivePhase::Reveal | ReceivePhase::Verification, None) if !pairing => {
+                if self.pending.len() < 20_000 {
                     self.pending.push(bytes.to_vec());
                 }
             }
-            ReceivePhase::Verification => {
-                if !pairing && self.pending.len() < 20_000 {
-                    self.pending.push(bytes.to_vec());
-                }
-            }
-            // Finished: the file stays acquired; only ANOTHER sending code
-            // restarts a reception (the same sending coming round has no effect).
-            ReceivePhase::Data | ReceivePhase::Finished => {
-                if pairing {
-                    if let (Some(code), Some(current)) = (pairing_payload(bytes, INIT_CODE_SIZE), &self.init_code) {
-                        if other_sending(&code, current) {
-                            *self = self.next();
-                            events.push(Event::NewSending);
-                            events.extend(self.process(bytes)?);
-                        }
-                    }
-                } else if self.phase == ReceivePhase::Data {
-                    events.extend(self.data_frame(bytes)?);
-                }
-            }
+            _ => {}
         }
         Ok(events)
     }
 
     fn read_code(&mut self, code: Vec<u8>) -> Result<Event, OrpError> {
         let info = self.session.show_init_code(&code)?;
-        let response_code = if info.by_passphrase {
-            // Sender without a camera (bench): the bench passphrase first, only
-            // a code to compare remains.
-            self.session.pair_by_passphrase(BENCH_PASSPHRASE)?;
-            None
+        let (sas, response_code) = if info.by_passphrase {
+            // Sender without a camera (OptiRelay Studio, this app): its code
+            // is on its screen, as text — the user types it.
+            self.phase = ReceivePhase::Passphrase;
+            (None, None)
         } else {
-            Some(self.session.response_code()?)
+            // Codes path: the response code for the sender's camera; the SAS
+            // comes with the sender's reveal code.
+            self.phase = ReceivePhase::Reveal;
+            (None, Some(self.session.response_code()?))
         };
-        let event = Event::CodeRead { sas: self.session.sas()?, stream_size: info.stream_size, by_passphrase: info.by_passphrase, response_code };
+        let event = Event::CodeRead { sas, stream_size: info.stream_size, by_passphrase: info.by_passphrase, response_code };
         self.init_code = Some(code);
         self.info = Some(info);
-        self.phase = ReceivePhase::Verification;
         Ok(event)
+    }
+
+    /// Passphrase path, with the code TYPED by the user (the one the sender
+    /// shows, "K7QF-M2XP-9CHR": normalized by `typed_passphrase`). A session
+    /// pairs only once: a fresh one is opened on the same init code each
+    /// time; the frames set aside are kept. Returns the verification code,
+    /// to compare with the sender's. Allowed while waiting for the code, and
+    /// again during the comparison (codes differ: retype).
+    pub fn pair_with_passphrase(&mut self, typed: &str) -> Result<String, OrpError> {
+        let by_passphrase = self.info.as_ref().is_some_and(|i| i.by_passphrase);
+        let waiting = matches!(self.phase, ReceivePhase::Passphrase | ReceivePhase::Verification);
+        let (true, true, Some(code)) = (by_passphrase, waiting, self.init_code.as_ref()) else {
+            return Err(OrpError::InvalidState { action: "pairWithPassphrase".into(), state: format!("{:?}", self.phase) });
+        };
+        let passphrase = typed_passphrase(typed);
+        if passphrase.is_empty() {
+            return Err(OrpError::Other("empty code".into()));
+        }
+        let mut session = ReceiverSession::new(Box::new(CryptoRust::new()));
+        session.show_init_code(code)?;
+        session.pair_by_passphrase(&passphrase)?;
+        self.session = session;
+        self.phase = ReceivePhase::Verification;
+        self.session.sas()
+    }
+
+    /// The passphrase path is waiting for a typed code.
+    pub fn needs_code(&self) -> bool {
+        self.phase == ReceivePhase::Passphrase
     }
 
     /// Codes match: reception starts; the pending frames are replayed.
     pub fn confirm(&mut self) -> Result<Vec<Event>, OrpError> {
         self.session.confirm_sas()?;
         self.phase = ReceivePhase::Data;
+        self.refused.clear();
         let mut events = Vec::new();
-        for t in std::mem::take(&mut self.pending) {
+        let mut pending = std::mem::take(&mut self.pending).into_iter();
+        for t in pending.by_ref() {
+            events.extend(self.data_frame(&t)?);
             if self.phase != ReceivePhase::Data {
                 break;
             }
-            events.extend(self.data_frame(&t)?);
+        }
+        // Wrong code while replaying: the frames not replayed yet wait for
+        // the next attempt, with the refused ones.
+        if self.phase == ReceivePhase::Passphrase {
+            self.pending.extend(pending);
         }
         Ok(events)
     }
@@ -162,6 +245,15 @@ impl Receiver {
             Ok(s) => s,
             Err(_) => return Ok(Vec::new()), // frame rejected: counted by the session
         };
+        if status == FrameStatus::Rejected(Rejection::Forged) && self.accepted == 0 && self.info.as_ref().is_some_and(|i| i.by_passphrase) {
+            // Nothing authenticates yet: most likely a wrong typed code.
+            self.refused.push(bytes.to_vec());
+            if self.refused.len() as u64 >= WRONG_CODE_REJECTIONS {
+                self.wrong_code()?;
+                return Ok(vec![Event::WrongCode]);
+            }
+            return Ok(Vec::new());
+        }
         if !matches!(status, FrameStatus::Accepted) {
             return Ok(Vec::new());
         }
@@ -178,12 +270,33 @@ impl Receiver {
     }
 }
 
+impl Receiver {
+    /// Back to waiting for the code: fresh session on the same init code, the
+    /// refused frames set aside again.
+    fn wrong_code(&mut self) -> Result<(), OrpError> {
+        let Some(code) = self.init_code.clone() else { return Ok(()) };
+        let mut session = ReceiverSession::new(Box::new(CryptoRust::new()));
+        session.show_init_code(&code)?;
+        self.session = session;
+        self.phase = ReceivePhase::Passphrase;
+        let mut refused = std::mem::take(&mut self.refused);
+        refused.append(&mut self.pending);
+        self.pending = refused;
+        Ok(())
+    }
+}
+
+/// Session id of an init code (kind ‖ version ‖ session_id ‖ …).
+fn session_id(code: &[u8]) -> &[u8] {
+    code.get(2..18).unwrap_or(&[])
+}
+
 /// Init code of ANOTHER session (different id, plausible content).
 fn other_sending(code: &[u8], current: &[u8]) -> bool {
-    if code.len() < 17 || code[..16] == current[..16.min(current.len())] {
+    if session_id(code) == session_id(current) {
         return false;
     }
-    read_init_code(code).map(|i| code[16] == 0x04 && i.k_total > 0 && i.block_count > 0 && i.stream_size > 0).unwrap_or(false)
+    read_init_code(code).map(|i| i.k_total > 0 && i.block_count > 0 && i.stream_size > 0).unwrap_or(false)
 }
 
 /// REAL progress of a multi-block file: it is complete only if ALL blocks

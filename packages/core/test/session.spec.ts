@@ -20,11 +20,12 @@ import {
 
 const crypto = new CryptoWebCrypto();
 
-/** Pairs two sessions through the strong path: init code + response code. */
+/** Pairs two sessions through the strong path: init code, response code, reveal code. */
 async function pair(sender: SenderSession, receiver: ReceiverSession): Promise<void> {
   receiver.scanInitCode(sender.initCode());
   const response = await receiver.responseCode();
   await sender.receiveResponseCode(response);
+  await receiver.receiveRevealCode(sender.revealCode());
   expect(sender.sas()).toBe(receiver.sas());
   sender.confirmSas();
   receiver.confirmSas();
@@ -86,8 +87,8 @@ describe("end-to-end session (WebCrypto)", () => {
 
   it("transfers a text message through the degraded path (passphrase), without encryption or compression", async () => {
     const message = new TextEncoder().encode("Plain test message — UC-01, without encryption.");
-    const sender = new SenderSession(crypto, { encryption: "none", compression: false });
-    const receiver = new ReceiverSession(crypto);
+    const sender = new SenderSession(crypto, { encryption: "none", compression: false, pairing: "passphrase" });
+    const receiver = new ReceiverSession(crypto, { encryption: "optional" });
     await sender.prepare(message);
     receiver.scanInitCode(sender.initCode());
     await receiver.pairWithPassphrase("shared-pairing-passphrase");
@@ -172,6 +173,7 @@ describe("end-to-end session (WebCrypto)", () => {
     receiverB.scanInitCode(senderB.initCode());
     const responseB = await receiverB.responseCode();
     await senderB.receiveResponseCode(responseB);
+    await receiverB.receiveRevealCode(senderB.revealCode());
     senderB.confirmSas();
     receiverB.confirmSas();
 
@@ -181,7 +183,7 @@ describe("end-to-end session (WebCrypto)", () => {
   it("explicitly rejects an incompatible major version (F-21)", async () => {
     const plaintext = new Uint8Array(4_000);
     const sender = new SenderSession(crypto, { compression: false, encryption: "none" });
-    const receiver = new ReceiverSession(crypto);
+    const receiver = new ReceiverSession(crypto, { encryption: "optional" });
     await sender.prepare(plaintext);
     await pair(sender, receiver);
     const buffer: Uint8Array[] = [];

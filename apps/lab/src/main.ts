@@ -119,6 +119,18 @@ if (location.host === "appassets.androidplatform.net") {
   $("site-nav").hidden = false;
 }
 
+// GitHub menu of the header: closes on a click elsewhere or Escape.
+for (const menu of document.querySelectorAll<HTMLDetailsElement>(".nav-menu")) {
+  document.addEventListener("click", (e) => {
+    if (menu.open && !menu.contains(e.target as Node)) menu.open = false;
+  });
+  menu.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !menu.open) return;
+    menu.open = false;
+    menu.querySelector("summary")?.focus();
+  });
+}
+
 function log(line: string): void {
   output.textContent += `\n${line}`;
   output.scrollTop = output.scrollHeight;

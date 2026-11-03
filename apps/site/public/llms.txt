@@ -1,0 +1,18 @@
+# OptiRelay
+
+> OptiRelay is an open optical transfer protocol (ORP, the Optical Relay Protocol): it sends a file from a screen to a camera, with no Wi-Fi, no Bluetooth, no pairing and no server. The sender is a web page; the receiver is a browser with a camera or the Android app.
+
+Key facts:
+- Two temporal modulation modes: TM4 (2 bits per module, more robust) and TM8 (3 bits per module). Each frame alternates a reference subframe and a payload subframe; the camera reads their difference.
+- The reconstructed file is verified against its SHA-256 digest; a shared passphrase can authenticate the session.
+- Current protocol version: ORP v0.2. Code under Apache-2.0, specifications under CC BY 4.0.
+
+## Pages
+- [Home](https://orp.mindlog.today/): what OptiRelay is and what it is for
+- [Protocol](https://orp.mindlog.today/protocol/): TM4 and TM8, pairing, frame structure, error correction, integrity
+- [Studio](https://orp.mindlog.today/studio/): interactive demo, real transfer between two devices in the browser
+
+## Source
+- [Implementation](https://github.com/jacquesh82/orp-implementation): TypeScript SDK, Rust port, apps
+- [Specifications](https://github.com/jacquesh82/orp-specs): specification documents and interoperability vectors
+- [npm packages](https://www.npmjs.com/package/@optirelay/core): @optirelay/core, @optirelay/optical, @optirelay/browser

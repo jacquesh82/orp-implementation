@@ -3,7 +3,7 @@
 //! real reception. `cargo run --release -p orp-transfer --example block_simulation`
 use orp_core::session::{TransmissionOptions, SenderSession, PairingMode};
 use orp_core::{Codec, CryptoRust, Mulberry32};
-use orp_transfer::{pack, pairing_frame, Event, TransferredFile, Receiver, BENCH_PASSPHRASE};
+use orp_transfer::{pack, pairing_frame, Event, TransferredFile, Receiver};
 
 fn main() {
     let mut random = Mulberry32::new(42);
@@ -11,13 +11,14 @@ fn main() {
     let file = TransferredFile { name: "gros.bin".into(), mime_type: "application/octet-stream".into(), data };
     let mut em = SenderSession::new(Box::new(CryptoRust::new()), TransmissionOptions { codecs: vec![Codec::Color8], pairing: PairingMode::Passphrase, ..Default::default() }).unwrap();
     em.prepare(&pack(&file)).unwrap();
-    em.receive_passphrase(BENCH_PASSPHRASE).unwrap();
+    em.receive_passphrase("K7QFM2XP9CHR").unwrap();
     em.confirm_sas().unwrap();
     em.calibrate(Some(Codec::Color8)).unwrap();
     let init = pairing_frame(&em.init_code().unwrap()).unwrap();
     em.start(0).unwrap();
     let mut rec = Receiver::new();
     rec.process(&init).unwrap();
+    rec.pair_with_passphrase("K7QFM2XP9CHR").unwrap();
     rec.confirm().unwrap();
     let info = rec.info.clone().unwrap();
     println!("k_total {} in {} blocks", info.k_total, info.block_count);

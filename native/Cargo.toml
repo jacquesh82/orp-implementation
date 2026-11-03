@@ -14,3 +14,14 @@ license = "Apache-2.0"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# The pairing passphrase is stretched by PBKDF2 (600 000 iterations of
+# SHA-256, ORP v0.2): unoptimized, a derivation takes seconds in debug builds
+# and tests (≈ 1.5 s, × every passphrase of the vectors). The SHA-256
+# compression function (sha2) and the PBKDF2 loop (orp-core) are therefore
+# optimized even in dev — ≈ 50 ms per derivation.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.orp-core]
+opt-level = 3

@@ -1,0 +1,25 @@
+{
+  "name": "@optirelay/example-studio",
+  "private": true,
+  "version": "1.0.0",
+  "description": "OptiRelay Studio \u2014 interactive demo built on the npm packages @optirelay/core, optical and browser: optical lab, real transfer between two devices, anatomy of a frame.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:lan": "vite --mode lan",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "check": "tsc",
+    "test:sim": "node scripts/sim-pipeline.mjs 2 && node scripts/sim-pairing.mjs"
+  },
+  "dependencies": {
+    "@optirelay/browser": "^0.2.2",
+    "@optirelay/core": "^0.2.0",
+    "@optirelay/optical": "^0.2.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
+  }
+}

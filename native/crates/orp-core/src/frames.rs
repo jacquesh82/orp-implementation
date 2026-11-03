@@ -80,7 +80,7 @@ pub fn symbol_capacity(codec: Codec) -> usize {
     }
 }
 
-/// FRAME_VERSION = VERSION_PROTCOLE (0.1).
+/// FRAME_VERSION = VERSION_PROTCOLE (0.2).
 pub const FRAME_VERSION: Version = PROTOCOL_VERSION;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

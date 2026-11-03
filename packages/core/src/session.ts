@@ -41,11 +41,16 @@ import {
   wipeKeys,
   writeInitCode,
   writeResponseCode,
+  writeRevealCode,
   InitCodeInfo,
   tokenOf,
   readInitCode,
   readResponseCode,
+  readRevealCode,
   frameNonce,
+  commitmentOf,
+  transcriptHash,
+  expectedK,
   SESSION_ID_SIZE,
 } from "./pairing.ts";
 import { CryptoProvider } from "./encryption.ts";
@@ -75,7 +80,12 @@ export type SessionState =
   | "annule";
 
 export interface TransmissionOptions {
-  /** Defaults to "required": without authenticated pairing, no transfer (§6). */
+  /**
+   * Defaults to "required": without authenticated pairing, no transfer (§6).
+   * "optional" behaves like "required" on the sender side (kept for API
+   * compatibility); "none" sends clear frames — the receiver must accept them
+   * explicitly (ReceptionOptions.encryption).
+   */
   encryption?: "required" | "optional" | "none";
   /** Offered codecs, in order of preference. Default: 8 → 4 → 2 colors. */
   codecs?: Codec[];
@@ -115,6 +125,22 @@ export interface ReceiveProgress {
   forged: number;
   corrupted: number;
 }
+
+export interface ReceptionOptions {
+  /**
+   * "required" (default): an init code announcing clear frames is refused,
+   * and every data frame must be encrypted. "optional": a sender in
+   * encryption "none" is accepted — its frames are then authenticated by
+   * nothing but the final SHA-256 of the init code.
+   */
+  encryption?: "required" | "optional";
+  /** Upper bound of the decompressed file (default 256 MiB): a deflate bomb stops there. */
+  maxFileSize?: number;
+  logger?: Logger;
+}
+
+/** Default upper bound of a decompressed file. */
+export const DEFAULT_MAX_FILE_SIZE = 256 * 1024 * 1024;
 
 type SenderEvents = {
   frame: { block: number; seed: number; codec: Codec; symbolCount: number };
@@ -164,6 +190,9 @@ export class SenderSession {
   private sessionId = new Uint8Array(SESSION_ID_SIZE);
   private ephemeralPrivateKey: CryptoKey | undefined = undefined;
   private ephemeralPublicKey: Uint8Array | undefined = undefined;
+  private commitment: Uint8Array | undefined = undefined;
+  private initCodeBytes: Uint8Array | undefined = undefined;
+  private revealCodeBytes: Uint8Array | undefined = undefined;
   private keys: SessionKeys | undefined = undefined;
   private plan: BlockPlan | undefined = undefined;
   private streamSize = 0;
@@ -217,6 +246,7 @@ export class SenderSession {
     const pair = await this.crypto.generateEcdhKeyPair();
     this.ephemeralPrivateKey = pair.privateKey;
     this.ephemeralPublicKey = pair.publicKey;
+    this.commitment = await commitmentOf(this.crypto, this.sessionId, pair.publicKey);
     let stream = input;
     if (this.wantsCompression) {
       const compressed = await compress(input);
@@ -248,39 +278,65 @@ export class SenderSession {
     return this.keys;
   }
 
-  /** Payload of the init code — the optical layer encodes it. */
+  /** Payload of the init code — the optical layer encodes it. Same bytes on every call (transcript). */
   initCode(): Uint8Array {
+    if (this.initCodeBytes) return this.initCodeBytes;
     const plan = this.requirePlan;
-    if (!this.ephemeralPublicKey) throw new OrpPairingRequired("prepare() must run before the init code");
-    return writeInitCode({
+    if (!this.commitment) throw new OrpPairingRequired("prepare() must run before the init code");
+    this.initCodeBytes = writeInitCode({
       sessionId: this.sessionId,
-      senderPublicKey: this.ephemeralPublicKey,
+      commitment: this.commitment,
       streamSize: this.streamSize,
       streamDigest: this.streamDigest!,
       blockCount: blockCount(plan),
       kTotal: kTotal(plan),
       compressed: this.compressed,
       byPassphrase: this.byPassphrase,
+      encrypted: this.encryptionActive,
     });
+    return this.initCodeBytes;
   }
 
-  /** Strong path: reads the response code (receiver pub), derives the keys. */
+  /**
+   * Strong path, step 2: reads the response code (receiver pub), derives the
+   * keys and the SAS. The reveal code (`revealCode()`) must then be shown to
+   * the receiver: without it, it cannot compute its own SAS.
+   */
   async receiveResponseCode(code: Uint8Array): Promise<void> {
     assertState("receiveResponseCode", this._state, ["appairage"]);
-    if (!this.ephemeralPrivateKey) throw new OrpPairingRequired("ephemeral key pair missing");
+    if (this.byPassphrase) throw new OrpInvalidState("receiveResponseCode", "passphrase pairing");
+    if (!this.ephemeralPrivateKey || !this.ephemeralPublicKey) throw new OrpPairingRequired("ephemeral key pair missing");
     const parsed = readResponseCode(code);
     if (!bytesEqual(parsed.sessionId, this.sessionId)) {
       throw new OrpInvalidPairingCode("response code from another session");
     }
+    const init = this.initCode();
+    const reveal = writeRevealCode(this.sessionId, this.ephemeralPublicKey);
     const secret = await this.crypto.deriveEcdhSecret(this.ephemeralPrivateKey, parsed.receiverPublicKey);
-    this.keys = await deriveKeys(this.crypto, secret, this.sessionId, parsed.sasSeed);
+    try {
+      this.keys = await deriveKeys(this.crypto, secret, await transcriptHash(this.crypto, init, code, reveal));
+    } finally {
+      secret.fill(0);
+    }
+    this.revealCodeBytes = reveal;
     this._state = "sas";
   }
 
-  /** Degraded path: shared passphrase typed on both sides — derived SAS seed, zero coordination. */
+  /**
+   * Strong path, step 3: the reveal code (sender pub) to display for the
+   * receiver once its response code has been read — it opens the commitment
+   * of the init code.
+   */
+  revealCode(): Uint8Array {
+    if (!this.revealCodeBytes) throw new OrpPairingRequired("response code not received yet");
+    return this.revealCodeBytes;
+  }
+
+  /** Degraded path: shared passphrase typed on both sides, stretched by PBKDF2, bound to the init code. */
   async receivePassphrase(passphrase: string): Promise<void> {
     assertState("receivePassphrase", this._state, ["appairage"]);
-    this.keys = await deriveKeysFromPassphrase(this.crypto, passphrase, this.sessionId);
+    if (!this.byPassphrase) throw new OrpInvalidState("receivePassphrase", "pairing by codes");
+    this.keys = await deriveKeysFromPassphrase(this.crypto, passphrase, this.initCode());
     this._state = "sas";
   }
 
@@ -459,6 +515,7 @@ export class SenderSession {
     this.ephemeralPrivateKey = undefined;
     this.ephemeralPublicKey = undefined;
     this.streamDigest = undefined;
+    this.revealCodeBytes = undefined;
   }
 }
 
@@ -474,18 +531,24 @@ export class ReceiverSession {
   private readonly crypto: CryptoProvider;
   private readonly logger: Logger;
 
+  private readonly acceptClear: boolean;
+  private readonly maxFileSize: number;
+
   private info: InitCodeInfo | undefined = undefined;
+  private initCodeBytes: Uint8Array | undefined = undefined;
+  private responseCodeBytes: Uint8Array | undefined = undefined;
   private keys: SessionKeys | undefined = undefined;
   private ephemeralPrivateKey: CryptoKey | undefined = undefined;
   private decoders = new Map<number, FountainDecoder>();
-  private seenK = new Map<number, number>();
   private seen = new Set<string>();
   private completeAnnounced = false;
   private stats = { frames: 0, replays: 0, forged: 0, corrupted: 0 };
 
-  constructor(crypto: CryptoProvider, options: { logger?: Logger } = {}) {
+  constructor(crypto: CryptoProvider, options: ReceptionOptions = {}) {
     this.crypto = crypto;
     this.logger = options.logger ?? silentLogger;
+    this.acceptClear = options.encryption === "optional";
+    this.maxFileSize = options.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
   }
 
   get state(): SessionState {
@@ -496,32 +559,68 @@ export class ReceiverSession {
     return this.info ? tokenOf(this.info.sessionId) : undefined;
   }
 
-  /** Reads the init code displayed by the sender. */
+  /**
+   * Reads the init code displayed by the sender. Refuses a sender announcing
+   * clear frames unless the receiver accepts them (`encryption: "optional"`).
+   */
   scanInitCode(code: Uint8Array): InitCodeInfo {
     assertState("scanInitCode", this._state, ["initial"]);
     const parsed = readInitCode(code);
+    if (!parsed.encrypted && !this.acceptClear) {
+      throw new OrpInvalidPairingCode("the sender announces clear frames, this receiver requires encryption");
+    }
     this.info = parsed;
+    this.initCodeBytes = code.slice();
     this._state = "appairage";
     return parsed;
   }
 
-  /** Strong path: produces the response code for the sender to scan. */
+  /**
+   * Strong path, step 2: produces the response code for the sender to scan.
+   * The keys and the SAS only exist once the reveal code has been read
+   * (`receiveRevealCode`).
+   */
   async responseCode(): Promise<Uint8Array> {
     assertState("responseCode", this._state, ["appairage"]);
     const info = this.requireInfo();
+    if (info.byPassphrase) throw new OrpInvalidState("responseCode", "passphrase pairing");
+    if (this.responseCodeBytes) return this.responseCodeBytes;
     const pair = await this.crypto.generateEcdhKeyPair();
     this.ephemeralPrivateKey = pair.privateKey;
-    const sasSeed = new DataView(this.crypto.randomBytes(4).buffer).getUint32(0);
-    const secret = await this.crypto.deriveEcdhSecret(this.ephemeralPrivateKey, info.senderPublicKey);
-    this.keys = await deriveKeys(this.crypto, secret, info.sessionId, sasSeed);
-    this._state = "sas";
-    return writeResponseCode(info.sessionId, pair.publicKey, sasSeed);
+    this.responseCodeBytes = writeResponseCode(info.sessionId, pair.publicKey);
+    return this.responseCodeBytes;
   }
 
-  /** Degraded path: shared passphrase — same keys as the sender, derived SAS seed. */
+  /**
+   * Strong path, step 3: reads the reveal code (sender pub), checks it opens
+   * the commitment of the init code, derives the keys and the SAS.
+   */
+  async receiveRevealCode(code: Uint8Array): Promise<void> {
+    assertState("receiveRevealCode", this._state, ["appairage"]);
+    const info = this.requireInfo();
+    if (!this.ephemeralPrivateKey || !this.responseCodeBytes) throw new OrpPairingRequired("response code not produced yet");
+    const parsed = readRevealCode(code);
+    if (!bytesEqual(parsed.sessionId, info.sessionId)) throw new OrpInvalidPairingCode("reveal code from another session");
+    const expected = await commitmentOf(this.crypto, info.sessionId, parsed.senderPublicKey);
+    if (!constantTimeEqual(expected, info.commitment)) {
+      throw new OrpInvalidPairingCode("the reveal code does not open the commitment of the init code");
+    }
+    const secret = await this.crypto.deriveEcdhSecret(this.ephemeralPrivateKey, parsed.senderPublicKey);
+    try {
+      const transcript = await transcriptHash(this.crypto, this.initCodeBytes!, this.responseCodeBytes, code);
+      this.keys = await deriveKeys(this.crypto, secret, transcript);
+    } finally {
+      secret.fill(0);
+    }
+    this.ephemeralPrivateKey = undefined;
+    this._state = "sas";
+  }
+
+  /** Degraded path: shared passphrase, stretched by PBKDF2, bound to the init code. */
   async pairWithPassphrase(passphrase: string): Promise<void> {
     assertState("pairWithPassphrase", this._state, ["appairage"]);
-    this.keys = await deriveKeysFromPassphrase(this.crypto, passphrase, this.requireSessionId());
+    if (!this.requireInfo().byPassphrase) throw new OrpInvalidState("pairWithPassphrase", "pairing by codes");
+    this.keys = await deriveKeysFromPassphrase(this.crypto, passphrase, this.initCodeBytes!);
     this._state = "sas";
   }
 
@@ -543,7 +642,7 @@ export class ReceiverSession {
    */
   async receiveFrame(t: Uint8Array): Promise<FrameStatus> {
     assertState("receiveFrame", this._state, ["calibre", "transmission", "termine"]);
-    this._state = "transmission";
+    if (this._state === "calibre") this._state = "transmission";
     let decoded;
     try {
       decoded = readFrame(t);
@@ -570,6 +669,22 @@ export class ReceiverSession {
       this.logger.warn("frame from an unknown session", { token: header.token });
       throw new OrpUnknownSession(header.token);
     }
+    // Frame outside the layout announced by the init code: block that does
+    // not exist, or K that is not the one of the block. Rejected before any
+    // allocation — a decoder per forged block number would grow without bound.
+    if (header.k !== expectedK(info.streamSize, header.block)) {
+      this.events.emit("rejection", { reason: "invalide", block: header.block, seed: header.seed });
+      return { accepted: false, rejection: "invalide" };
+    }
+    // Encryption announced by the init code (bound to the keys by the
+    // transcript): a clear frame in an encrypted session is a forgery, never
+    // a frame to decode.
+    const encrypted = (header.flags & FLAG.ENCRYPTED) !== 0;
+    if (encrypted !== info.encrypted) {
+      this.stats.forged++;
+      this.events.emit("rejection", { reason: "falsifiee", block: header.block, seed: header.seed });
+      return { accepted: false, rejection: "falsifiee" };
+    }
     // Replay: (block, seed) already seen — ignored, counted, never decoded again.
     const key = `${header.block}/${header.seed}`;
     if (this.seen.has(key)) {
@@ -578,7 +693,7 @@ export class ReceiverSession {
       return { accepted: false, rejection: "rejeu" };
     }
     let payload = decoded.payload;
-    if ((header.flags & FLAG.ENCRYPTED) !== 0) {
+    if (encrypted) {
       try {
         const keys = this.requireKeys();
         const nonce = await frameNonce(this.crypto, keys.nonceKey, header.block, header.seed);
@@ -613,22 +728,12 @@ export class ReceiverSession {
     return this.info;
   }
 
-  private requireSessionId(): Uint8Array {
-    return this.requireInfo().sessionId;
-  }
-
   private requireKeys(): SessionKeys {
     if (!this.keys) throw new OrpPairingRequired("keys not derived — pairing incomplete");
     return this.keys;
   }
 
   private decoderFor(header: { block: number; k: number }): FountainDecoder {
-    const knownK = this.seenK.get(header.block);
-    if (knownK === undefined) {
-      this.seenK.set(header.block, header.k);
-    } else if (knownK !== header.k) {
-      throw new OrpError("k-incoherent", `inconsistent K for block ${header.block}`);
-    }
     let d = this.decoders.get(header.block);
     if (!d) {
       d = new FountainDecoder(header.k);
@@ -644,15 +749,10 @@ export class ReceiverSession {
    */
   blocks(): { k: number; received: number; complete: boolean }[] {
     const count = this.totalBlocks();
-    const kTotal = this.info?.kTotal ?? 0;
-    let known = 0;
-    for (const k of this.seenK.values()) known += k;
-    let missing = 0;
-    for (let b = 0; b < count; b++) if (!this.seenK.has(b)) missing++;
-    const estimatedK = missing > 0 ? Math.max(1, Math.ceil(Math.max(0, kTotal - known) / missing)) : 1;
+    const size = this.info?.streamSize ?? 0;
     return Array.from({ length: count }, (_, b) => {
       const d = this.decoders.get(b);
-      return d ? { k: d.k, received: d.receivedSymbols, complete: d.complete } : { k: estimatedK, received: 0, complete: false };
+      return d ? { k: d.k, received: d.receivedSymbols, complete: d.complete } : { k: expectedK(size, b), received: 0, complete: false };
     });
   }
 
@@ -698,7 +798,7 @@ export class ReceiverSession {
     if (!bytesEqual(digest, info.streamDigest)) {
       throw new OrpIntegrityError("the SHA-256 digest of the rebuilt stream does not match");
     }
-    if (info.compressed) stream = await decompress(stream);
+    if (info.compressed) stream = await decompress(stream, this.maxFileSize);
     this._state = "termine";
     return { data: stream, verified: true };
   }
@@ -708,6 +808,14 @@ export class ReceiverSession {
     this.keys = undefined;
     this.decoders.clear();
   }
+}
+
+/** Comparison whose duration does not depend on where the arrays differ. */
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i]! ^ b[i]!;
+  return diff === 0;
 }
 
 function concatTruncated(chunks: Uint8Array[], size: number): Uint8Array {

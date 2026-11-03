@@ -1,6 +1,6 @@
 {
   "name": "@optirelay/core",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "ORP protocol: messages, session, pairing, encryption, segmentation and fountain codes — no DOM, injected dependencies.",
   "type": "module",
   "main": "./src/index.ts",
@@ -8,10 +8,45 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "keywords": ["optirelay", "orp", "optical-relay", "qr", "fountain-code", "typescript"],
+  "keywords": [
+    "optirelay",
+    "orp",
+    "optical-relay",
+    "qr",
+    "fountain-code",
+    "typescript",
+    "optical-data-transfer",
+    "screen-to-camera",
+    "offline-file-transfer",
+    "air-gap"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lelabnet-creator/mindlog.optiRelay.git"
+    "url": "git+https://github.com/jacquesh82/orp-implementation.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "homepage": "https://orp.mindlog.today/",
+  "bugs": {
+    "url": "https://github.com/jacquesh82/orp-implementation/issues"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

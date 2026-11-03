@@ -29,11 +29,24 @@ pub fn compress(data: &[u8]) -> Option<Vec<u8>> {
     (compressed.len() < data.len()).then_some(compressed)
 }
 
-/// Decompresses a deflate-raw stream.
+/// Decompresses a deflate-raw stream, without bound.
 pub fn decompress(data: &[u8]) -> Result<Vec<u8>, OrpError> {
+    decompress_bounded(data, usize::MAX)
+}
+
+/// Decompresses a deflate-raw stream, stopping past `max_output` bytes
+/// (deflate bomb) with the error `taille-excessive` — like the TS
+/// `decompress(data, maxOutput)`. Never more than `max_output + 1` bytes are
+/// produced in memory.
+pub fn decompress_bounded(data: &[u8], max_output: usize) -> Result<Vec<u8>, OrpError> {
     let mut output = Vec::new();
+    let limit = (max_output as u64).saturating_add(1);
     DeflateDecoder::new(data)
+        .take(limit)
         .read_to_end(&mut output)
         .map_err(|e| OrpError::Other(format!("deflate-raw decompression failed: {e}")))?;
+    if output.len() > max_output {
+        return Err(OrpError::generic("taille-excessive", format!("decompressed data larger than {max_output} bytes")));
+    }
     Ok(output)
 }

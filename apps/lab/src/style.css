@@ -237,6 +237,20 @@ body.send-window #fullscreen-alert, body.send-window #fullscreen-gauge { width: 
 .site-link { position: relative; display: flex; align-items: center; min-height: 28px; padding: 0 7px; background: #353535; font: 400 10px/1 "Plex Mono Site", ui-monospace, monospace; text-transform: uppercase; }
 .site-link::before { content: ""; position: absolute; inset: -8px 0; }
 .site-link:hover { color: #010101 !important; background: #fff; }
+
+/* GitHub menu of the site menu: the two repositories to choose from. */
+.nav-menu { position: relative; }
+.nav-menu > summary { gap: 6px; list-style: none; cursor: pointer; }
+.nav-menu > summary::-webkit-details-marker { display: none; }
+.nav-menu[open] > summary { color: #010101; background: #fff; }
+.nav-menu-caret { font-size: 9px; transition: transform .15s; }
+.nav-menu[open] .nav-menu-caret { transform: rotate(180deg); }
+.nav-menu-panel { position: absolute; top: calc(100% + 13px); right: 0; z-index: 30; display: grid; min-width: 250px; background: #010101; border: 1px dashed #ffffff66; }
+.nav-menu-panel a { display: grid; gap: 5px; padding: 13px 16px; }
+.nav-menu-panel a + a { border-top: 1px dashed #ffffff66; }
+.nav-menu-panel a:hover, .nav-menu-panel a:focus-visible { background: linear-gradient(90deg, #0943a0, transparent); }
+.nav-menu-title { font-size: 15px; letter-spacing: -.2px; }
+.nav-menu-desc { color: #a3a3a3; font: 400 10px/1.2 "Plex Mono Site", ui-monospace, monospace; text-transform: uppercase; }
 .site-button { display: inline-flex; align-items: center; gap: 10px; min-height: 28px; padding-left: 10px; color: #fff; background: #0943a0; font: 400 10px/1 "Plex Mono Site", ui-monospace, monospace; text-transform: uppercase; }
 .site-button svg { width: 30px; height: 28px; padding: 7px; border-left: 1px dashed #ffffff80; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .site-button:hover { color: #010101 !important; background: #fff; }

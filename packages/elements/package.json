@@ -1,4 +1,5 @@
 {
+  "private": true,
   "name": "@optirelay/elements",
   "version": "0.1.0",
   "description": "ORP Web Components: <optirelay-send>, <optirelay-receive>, <optirelay-transfer-dialog> — Shadow DOM, slots, DOM events, usable without a framework.",

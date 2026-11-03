@@ -5,8 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#010101" />
     <meta name="description" content="Explore ORP, the Optical Relay Protocol: TM4 and TM8 temporal modulation, optical pairing, frame structure, error correction and file integrity." />
-    <title>ORP protocol — OptiRelay</title>
+    <title>Optical Relay Protocol (ORP): TM4 and TM8 explained — OptiRelay</title>
+    <link rel="canonical" href="https://orp.mindlog.today/protocol/" />
+    <link rel="icon" href="../favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="OptiRelay" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://orp.mindlog.today/protocol/" />
+    <meta property="og:title" content="Optical Relay Protocol (ORP): TM4 and TM8 explained" />
+    <meta property="og:description" content="How OptiRelay carries a file from a screen to a camera: temporal modulation, optical pairing, frame structure, error correction and file integrity." />
+    <meta property="og:image" content="https://orp.mindlog.today/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="OptiRelay: screen-to-camera file transfer, with an optical data matrix" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "@id": "https://orp.mindlog.today/protocol/#article",
+      "url": "https://orp.mindlog.today/protocol/",
+      "headline": "Optical Relay Protocol (ORP): TM4 and TM8 explained",
+      "description": "ORP, the Optical Relay Protocol: TM4 and TM8 temporal modulation, optical pairing, frame structure, error correction and file integrity.",
+      "image": "https://orp.mindlog.today/og-image.png",
+      "inLanguage": "en",
+      "version": "0.2",
+      "datePublished": "2026-11-01",
+      "dateModified": "2026-11-03",
+      "proficiencyLevel": "Expert",
+      "author": { "@type": "Person", "@id": "https://orp.mindlog.today/#author", "name": "Jacques Hullu", "url": "https://github.com/jacquesh82" },
+      "isPartOf": { "@type": "WebSite", "@id": "https://orp.mindlog.today/#website", "name": "OptiRelay", "url": "https://orp.mindlog.today/" },
+      "about": { "@id": "https://orp.mindlog.today/#app" },
+      "isBasedOn": "https://github.com/jacquesh82/orp-specs"
+    }
+    </script>
     <link rel="stylesheet" href="../src/style.css" />
     <script type="module" src="../src/main.ts"></script>
   </head>
@@ -19,23 +53,26 @@
     <header class="site-header">
       <nav class="header-inner frame" aria-label="Main navigation">
         <a class="brand" href="../" aria-label="OptiRelay, home"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a>
-        <div class="header-links"><a class="nav-link" href="../#principle">How it works</a><a class="nav-link" href="./" aria-current="page">Protocol</a></div>
-        <a class="button button-nav" href="../lab/"><span>Try it</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
+        <div class="header-links"><a class="nav-link" href="../#principle">How it works</a><a class="nav-link" href="./" aria-current="page">Protocol</a><details class="nav-menu"><summary class="nav-link">GitHub<span class="nav-menu-caret" aria-hidden="true">▾</span></summary><div class="nav-menu-panel"><a href="https://github.com/jacquesh82/orp-implementation" rel="noopener"><span class="nav-menu-title">Implementation</span><span class="nav-menu-desc">orp-implementation ↗</span></a><a href="https://github.com/jacquesh82/orp-specs" rel="noopener"><span class="nav-menu-title">Specifications</span><span class="nav-menu-desc">orp-specs ↗</span></a></div></details></div>
+        <a class="button button-nav" href="../studio/"><span>Try it</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
       </nav>
     </header>
     <main id="content" class="frame main-frame">
       <section class="protocol-hero" aria-labelledby="protocol-title">
-        <p class="tag">ORP v0.1 · Technical overview</p>
+        <p class="tag">ORP v0.2 · Technical overview</p>
         <h1 id="protocol-title">The Optical Relay Protocol.</h1>
         <p class="protocol-lead">A screen sends. A camera reads.<br />The receiver puts the file back together.</p>
-        <p class="protocol-summary">ORP describes how devices pair, encode data into optical frames, recover missing information and verify the reconstructed stream. The file transfer uses light, with no network or relay server.</p>
-        <a class="button button-outline" href="../lab/"><span>Open the test bench</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
+        <p class="protocol-summary">ORP, the Optical Relay Protocol, is an open protocol for transferring a file from a screen to a camera, with no network, no Bluetooth and no relay server. It describes how devices pair, encode data into optical frames, recover missing information and verify the reconstructed stream.</p>
+        <p class="protocol-updated">Version 0.2 · Updated <time datetime="2026-11-03">3 November 2026</time> · By <a href="https://github.com/jacquesh82" rel="author noopener">Jacques Hullu</a></p>
+        <a class="button button-outline" href="../studio/"><span>Open OptiRelay Studio</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
       </section>
 
       <div class="protocol-layout">
         <nav class="protocol-toc" aria-label="On this page">
           <p class="tag tag-gray">On this page</p>
           <ol><li><a href="#temporal">Temporal modulation</a></li><li><a href="#tm4">TM4</a></li><li><a href="#tm8">TM8</a></li><li><a href="#session">A transfer session</a></li><li><a href="#frames">Frame structure</a></li><li><a href="#recovery">Error recovery</a></li><li><a href="#security">Keys and integrity</a></li><li><a href="#conditions">Operating conditions</a></li></ol>
+          <a class="protocol-back" href="https://github.com/jacquesh82/orp-specs" rel="noopener">Full specification on GitHub ↗</a>
+          <a class="protocol-back" href="https://github.com/jacquesh82/orp-implementation" rel="noopener">Implementation on GitHub ↗</a>
           <a class="protocol-back" href="../">← Back to OptiRelay</a>
         </nav>
         <article class="protocol-content" aria-label="ORP protocol guide">
@@ -52,7 +89,7 @@
             <p class="section-index">02 / Robust first contact</p>
             <h2 id="tm4-title">TM4: four data directions.</h2>
             <p>TM4 encodes <strong>2 bits per data module</strong> using four colour directions around a neutral grey. Each pair of data directions differs on two RGB channels, giving the receiver more separation when a channel is weak.</p>
-            <p>Pairing uses TM4 for the initial and response codes. Its optical representation carries up to 349 encoded bytes per reference/payload pair, including protocol overhead.</p>
+            <p>Pairing uses TM4 for its three codes: initialisation, response and reveal. Its optical representation carries up to 349 encoded bytes per reference/payload pair, including protocol overhead.</p>
             <figure class="mode-pattern"><img src="../src/assets/frame-tm4-payload.svg" data-optical-mode="tm4" data-subframe="payload" width="270" height="270" alt="TM4 payload test pattern" /><figcaption>TM4 / Payload test pattern</figcaption></figure>
           </section>
 
@@ -68,15 +105,15 @@
           <section id="session" class="protocol-section" aria-labelledby="session-title">
             <p class="section-index">04 / From file to file</p>
             <h2 id="session-title">A transfer session.</h2>
-            <ol class="protocol-sequence"><li><h3>Prepare</h3><p>The sender creates a random 16-byte session identifier, prepares the data stream and computes its SHA-256 digest. Compression is applied when enabled and useful.</p></li><li><h3>Pair</h3><p>The receiver reads an initialisation code in TM4. When both devices have a camera, they exchange ephemeral public keys through an optical response code. A shared-phrase path is available when the sender has no camera.</p></li><li><h3>Compare</h3><p>Both devices display a six-digit short authentication string. Users compare and confirm it before data transfer; encryption alone does not authenticate the other device.</p></li><li><h3>Transmit</h3><p>The sender cycles through data frames. The receiver reads reference/payload pairs, corrects recoverable errors and gathers enough fountain symbols to reconstruct each block.</p></li><li><h3>Verify</h3><p>The receiver checks the reconstructed stream against the announced SHA-256 digest, decompresses it when necessary and makes the resulting file available.</p></li></ol>
+            <ol class="protocol-sequence"><li><h3>Prepare</h3><p>The sender creates a random 16-byte session identifier, prepares the data stream and computes its SHA-256 digest. Compression is applied when enabled and useful.</p></li><li><h3>Pair</h3><p>The receiver reads an initialisation code in TM4. It carries a commitment to the sender’s public key, not the key itself. The receiver answers with its own ephemeral key in a response code; the sender then shows a reveal code with its key, which must open the commitment. When the sender has no camera, both users type the same passphrase instead.</p></li><li><h3>Compare</h3><p>Both devices display a six-digit short authentication string. Users compare and confirm it before data transfer; encryption alone does not authenticate the other device.</p></li><li><h3>Transmit</h3><p>The sender cycles through data frames. The receiver reads reference/payload pairs, corrects recoverable errors and gathers enough fountain symbols to reconstruct each block.</p></li><li><h3>Verify</h3><p>The receiver checks the reconstructed stream against the announced SHA-256 digest, decompresses it when necessary and makes the resulting file available.</p></li></ol>
           </section>
 
           <section id="frames" class="protocol-section" aria-labelledby="frames-title">
             <p class="section-index">05 / Binary envelope</p>
             <h2 id="frames-title">One frame, two layers.</h2>
-            <p>TM4 and TM8 change the optical representation, while keeping the ORP v0.1 binary frame format. Multibyte integers use big-endian order.</p>
+            <p>TM4 and TM8 change the optical representation, not the binary frame format, which is unchanged since v0.1. Multibyte integers use big-endian order.</p>
             <div class="frame-formula"><code>3 × metadata + Reed–Solomon protected body</code></div>
-            <div class="protocol-table-wrap" role="region" aria-label="Frame fields" tabindex="0"><table><caption>ORP v0.1 frame fields</caption><thead><tr><th scope="col">Part</th><th scope="col">Size</th><th scope="col">Purpose</th></tr></thead><tbody><tr><th scope="row">Metadata</th><td>3 × 8 bytes</td><td>Magic, version, codec, flags and symbol count. The receiver votes across the three copies.</td></tr><tr><th scope="row">Body header</th><td>14 bytes</td><td>Session token, block index, source-symbol count and fountain seed.</td></tr><tr><th scope="row">Payload</th><td>1–4 × 96 bytes</td><td>Fountain symbols; the allowed count depends on the codec.</td></tr><tr><th scope="row">Authentication tag</th><td>16 bytes when encrypted</td><td>AES-GCM authentication of the encrypted payload and associated headers.</td></tr><tr><th scope="row">CRC-32</th><td>4 bytes</td><td>Detection of corruption in the body.</td></tr><tr><th scope="row">RS parity</th><td>8 bytes per chunk</td><td>Each body chunk contains at most 247 bytes before parity is added.</td></tr></tbody></table></div>
+            <div class="protocol-table-wrap" role="region" aria-label="Frame fields" tabindex="0"><table><caption>ORP v0.2 frame fields</caption><thead><tr><th scope="col">Part</th><th scope="col">Size</th><th scope="col">Purpose</th></tr></thead><tbody><tr><th scope="row">Metadata</th><td>3 × 8 bytes</td><td>Magic, version, codec, flags and symbol count. The receiver votes across the three copies.</td></tr><tr><th scope="row">Body header</th><td>14 bytes</td><td>Session token, block index, source-symbol count and fountain seed.</td></tr><tr><th scope="row">Payload</th><td>1–4 × 96 bytes</td><td>Fountain symbols; the allowed count depends on the codec.</td></tr><tr><th scope="row">Authentication tag</th><td>16 bytes when encrypted</td><td>AES-GCM authentication of the encrypted payload and associated headers.</td></tr><tr><th scope="row">CRC-32</th><td>4 bytes</td><td>Detection of corruption in the body.</td></tr><tr><th scope="row">RS parity</th><td>8 bytes per chunk</td><td>Each body chunk contains at most 247 bytes before parity is added.</td></tr></tbody></table></div>
           </section>
 
           <section id="recovery" class="protocol-section" aria-labelledby="recovery-title">
@@ -89,20 +126,23 @@
           <section id="security" class="protocol-section" aria-labelledby="security-title">
             <p class="section-index">07 / Session keys and file integrity</p>
             <h2 id="security-title">Authenticate the session.<br />Check the result.</h2>
-            <p>The reference implementation uses ephemeral <strong>ECDH P-256</strong> keys, <strong>HKDF-SHA-256</strong> key derivation and <strong>AES-256-GCM</strong> authenticated encryption. The six-digit comparison connects the cryptographic exchange to the device the user intends to pair with.</p>
-            <p>Session identifiers separate transfers. Repeated block/seed pairs are ignored. A final SHA-256 check covers the transferred stream, after optional compression and before decompression at the receiver.</p>
+            <p>The reference implementation uses ephemeral <strong>ECDH P-256</strong> keys, <strong>HKDF-SHA-256</strong> key derivation and <strong>AES-256-GCM</strong> authenticated encryption. The keys and the six-digit comparison code are derived from a hash of the pairing codes actually exchanged: an altered code gives different digits on the two screens.</p>
+            <p>Each side’s key is fixed before it sees the other’s: the sender commits to its key in the initialisation code and only reveals it after reading the response. A man-in-the-middle therefore has to choose both of its keys blind, and makes the two six-digit codes match with a probability of one in a million per attempt.</p>
+            <p>Without a camera on the sender side, the passphrase (at least 8 characters) is stretched by <strong>PBKDF2-HMAC-SHA-256</strong> with 600,000 iterations.</p>
+            <p>Encryption is announced in the initialisation code and enforced: a clear frame injected into an encrypted session is rejected, and so is any frame whose block or symbol count does not match the announced layout. Repeated block/seed pairs are ignored, decompression stops past a configured bound, and a final SHA-256 check covers the transferred stream, after optional compression and before decompression.</p>
+            <p class="protocol-note">New in v0.2 (November 2026): commit/reveal pairing, keys bound to the pairing transcript, PBKDF2 passphrase, enforced encryption, layout checks and bounded decompression. The frame format, the optics and the fountain code are unchanged.</p>
           </section>
 
           <section id="conditions" class="protocol-section" aria-labelledby="conditions-title">
             <p class="section-index">08 / Test on your devices</p>
             <h2 id="conditions-title">Measure the actual channel.</h2>
-            <p>TM4 and TM8 are experimental temporal representations available in the test bench. Camera exposure, display refresh, motion, distance and reflections affect reception. Keep the full matrix and its quiet zone in view.</p>
-            <p>The v0.1 sender repeats frames without a receiver acknowledgement channel. It does not automatically know when reception is complete. The lab exposes the receiving state so you can observe the result on your own devices.</p>
-            <a class="button button-white" href="../lab/"><span>Try TM4 and TM8</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
+            <p>TM4 and TM8 are experimental temporal representations available in OptiRelay Studio. Camera exposure, display refresh, motion, distance and reflections affect reception. Keep the full matrix and its quiet zone in view.</p>
+            <p>The v0.2 sender repeats frames without a receiver acknowledgement channel: it does not automatically know when reception is complete. An optical return channel is planned for a later version. The lab exposes the receiving state so you can observe the result on your own devices.</p>
+            <a class="button button-white" href="../studio/"><span>Try TM4 and TM8</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
           </section>
         </article>
       </div>
     </main>
-    <footer class="site-footer frame"><div class="footer-strip"><p>A research project by LeLab</p><a class="brand" href="../" aria-label="OptiRelay, home"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a><a class="tag tag-gray" href="../lab/">Test bench <span aria-hidden="true">↗</span></a></div></footer>
+    <footer class="site-footer frame"><div class="footer-strip"><p>A research project by Jacques Hullu · LeLab<br />ORP v0.2 · Updated November 2026</p><a class="brand" href="../" aria-label="OptiRelay, home"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a><div class="footer-links"><a class="tag tag-gray" href="../studio/">OptiRelay Studio <span aria-hidden="true">↗</span></a><a class="tag tag-gray" href="https://github.com/jacquesh82/orp-implementation" rel="noopener">Code on GitHub <span aria-hidden="true">↗</span></a><a class="tag tag-gray" href="https://github.com/jacquesh82/orp-specs" rel="noopener">Specifications on GitHub <span aria-hidden="true">↗</span></a></div></div></footer>
   </body>
 </html>

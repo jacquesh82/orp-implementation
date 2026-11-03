@@ -1,4 +1,4 @@
-"""Third-party ORP v0.1 implementation — written from the memo and the vectors only.
+"""Third-party ORP implementation (v0.1, updated to v0.2) — written from the memo and the vectors only.
 
 Exercise of the implementation guide (§10): no access to the reference code
 (`packages/`, `native/crates`); the interoperability vectors are the sole

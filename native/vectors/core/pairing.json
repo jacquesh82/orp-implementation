@@ -1,0 +1,319 @@
+{
+ "initCodes": [
+  {
+   "sessionId": "2399863f943ae00a14e9ca905d93bd06",
+   "senderPublicKey": "bc7e99b9633e7afede075444972fd9d8963220f45b3ecbc3f6ca5feca106af85a02bf36ed54032a6fa9010ca015c19902f0c48b0295664c3c1092d5e6509a27d63",
+   "commitment": "a6fa4394bf706279f6ea2422d65a90487e0b3cf454a4a7e3cf20834d91797c33",
+   "streamSize": 0,
+   "streamDigest": "d41ee3502b07f95b0beeda9ab9bbc656d9556396eafceb25ec2d02bd0af7da9c",
+   "blockCount": 0,
+   "kTotal": 0,
+   "compressed": false,
+   "byPassphrase": false,
+   "encrypted": true,
+   "code": "49022399863f943ae00a14e9ca905d93bd06a6fa4394bf706279f6ea2422d65a90487e0b3cf454a4a7e3cf20834d91797c330000000000000000d41ee3502b07f95b0beeda9ab9bbc656d9556396eafceb25ec2d02bd0af7da9c00000000000004",
+   "readBack": {
+    "blockCount": 0,
+    "kTotal": 0,
+    "streamSize": 0
+   }
+  },
+  {
+   "sessionId": "dbcb099e21bdaeb4f42be0ed878257d0",
+   "senderPublicKey": "30344aadb5cc7799fa542b9f58282cfaf1c5252a1a67e115d6c37c2a8f79956fde9c7a5b22ce9643fe73f866b523df50b5134855f22c3a6a0c3d510ba89884757b",
+   "commitment": "4d0c4efb1052e70c7ba74ba0d8cea2c9a78b9c72cf2d8c382004636e5e538c87",
+   "streamSize": 123456,
+   "streamDigest": "39ef8a105395da7167ed4c41f7febdd4c4da5f831bbdcce6d1c4931afbe73b9f",
+   "blockCount": 2,
+   "kTotal": 1286,
+   "compressed": true,
+   "byPassphrase": false,
+   "encrypted": true,
+   "code": "4902dbcb099e21bdaeb4f42be0ed878257d04d0c4efb1052e70c7ba74ba0d8cea2c9a78b9c72cf2d8c382004636e5e538c87000000000001e24039ef8a105395da7167ed4c41f7febdd4c4da5f831bbdcce6d1c4931afbe73b9f00020000050605",
+   "readBack": {
+    "blockCount": 2,
+    "kTotal": 1286,
+    "streamSize": 123456
+   }
+  },
+  {
+   "sessionId": "700f7b25ad281cf4dd658abfe16c65c7",
+   "senderPublicKey": "fa6c825f7d41d67947f428b0a9e0138beb4fc6450675a25fefd079d7bfdb25179cdec767130f0df990fff8948fe35a0995a4dee79d9e6b8c1e97590883c4d3677a",
+   "commitment": "9a62cc2c3c580739eaba3ed943dc99630df9b05893e7dc4565fadd0c37491bf2",
+   "streamSize": 6442352635,
+   "streamDigest": "144c37cb00f729a3669457738c8a1ac26d614381c6961e52929db56626a114a1",
+   "blockCount": 65535,
+   "kTotal": 67107840,
+   "compressed": false,
+   "byPassphrase": true,
+   "encrypted": false,
+   "code": "4902700f7b25ad281cf4dd658abfe16c65c79a62cc2c3c580739eaba3ed943dc99630df9b05893e7dc4565fadd0c37491bf2000000017ffe7ffb144c37cb00f729a3669457738c8a1ac26d614381c6961e52929db56626a114a1ffff03fffc0002",
+   "readBack": {
+    "blockCount": 65535,
+    "kTotal": 67107840,
+    "streamSize": 6442352635
+   }
+  },
+  {
+   "sessionId": "51ac05def57cc044f2d5010e4c3a1dfb",
+   "senderPublicKey": "f80af3c730cd0d36e1778db7902096aee42f29206b324993bf153341a40f5f4df88539ae54f0776863dca557fe242455fe7147bd95c26713fb08ea3b29e57ec0f6",
+   "commitment": "21b9845636df0f354d25f58bfc1d481313a994c26bd0d08246610cca5055dfac",
+   "streamSize": 77,
+   "streamDigest": "6b3c29ff3b73cd82271af5f6c616c5a97d1d9f6ff328d204ae798ebfec5f247e",
+   "blockCount": 1,
+   "kTotal": 1,
+   "compressed": true,
+   "byPassphrase": true,
+   "encrypted": true,
+   "code": "490251ac05def57cc044f2d5010e4c3a1dfb21b9845636df0f354d25f58bfc1d481313a994c26bd0d08246610cca5055dfac000000000000004d6b3c29ff3b73cd82271af5f6c616c5a97d1d9f6ff328d204ae798ebfec5f247e00010000000107",
+   "readBack": {
+    "blockCount": 1,
+    "kTotal": 1,
+    "streamSize": 77
+   }
+  },
+  {
+   "sessionId": "538fdc0825bca55653a0a4e50b5c97e4",
+   "senderPublicKey": "897cbbd64489f49f9a81e396bd87fa3bd00755a0f32651214831a8115c7fbb9c60eb6511e0bc1c03f73e37c7bc643b4c6a5d783bb4615203e0ace4becc1d925248",
+   "commitment": "98c1be1f179a4261ff81370f08676783a310fdb7e1baf5109407447ca7f6fd27",
+   "streamSize": 98304,
+   "streamDigest": "89c2bc5c010c1d16df3d097a6c68a382b12fa0134e92100606dbd9399585c81b",
+   "blockCount": 1,
+   "kTotal": 1024,
+   "compressed": false,
+   "byPassphrase": false,
+   "encrypted": false,
+   "code": "4902538fdc0825bca55653a0a4e50b5c97e498c1be1f179a4261ff81370f08676783a310fdb7e1baf5109407447ca7f6fd27000000000001800089c2bc5c010c1d16df3d097a6c68a382b12fa0134e92100606dbd9399585c81b00010000040000",
+   "readBack": {
+    "blockCount": 1,
+    "kTotal": 1024,
+    "streamSize": 98304
+   }
+  }
+ ],
+ "invalidCodes": [
+  {
+   "kind": "init",
+   "code": "490293140a57d4b33df45d12d9e8922032156c54eb12f14b237e88c63a8d7304c7f6fa5970efe95ba7e09b8f759bfe61601700000000000013881974551799bf65a1508ec95a40b69fedabb06f90c2f96e9ec572fa5e079237aa000100000035",
+   "error": "code-appairage-invalide"
+  },
+  {
+   "kind": "init",
+   "code": "520293140a57d4b33df45d12d9e8922032156c54eb12f14b237e88c63a8d7304c7f6fa5970efe95ba7e09b8f759bfe61601700000000000013881974551799bf65a1508ec95a40b69fedabb06f90c2f96e9ec572fa5e079237aa00010000003504",
+   "error": "code-appairage-invalide"
+  },
+  {
+   "kind": "init",
+   "code": "490193140a57d4b33df45d12d9e8922032156c54eb12f14b237e88c63a8d7304c7f6fa5970efe95ba7e09b8f759bfe61601700000000000013881974551799bf65a1508ec95a40b69fedabb06f90c2f96e9ec572fa5e079237aa00010000003504",
+   "error": "version-incompatible"
+  },
+  {
+   "kind": "init",
+   "code": "490293140a57d4b33df45d12d9e8922032156c54eb12f14b237e88c63a8d7304c7f6fa5970efe95ba7e09b8f759bfe61601700000000000013881974551799bf65a1508ec95a40b69fedabb06f90c2f96e9ec572fa5e079237aa0001000000350c",
+   "error": "code-appairage-invalide"
+  },
+  {
+   "kind": "init",
+   "code": "490293140a57d4b33df45d12d9e8922032156c54eb12f14b237e88c63a8d7304c7f6fa5970efe95ba7e09b8f759bfe61601700000000000013881974551799bf65a1508ec95a40b69fedabb06f90c2f96e9ec572fa5e079237aa00010000003604",
+   "error": "code-appairage-invalide"
+  },
+  {
+   "kind": "init",
+   "code": "490293140a57d4b33df45d12d9e8922032156c54eb12f14b237e88c63a8d7304c7f6fa5970efe95ba7e09b8f759bfe61601700000000000013881974551799bf65a1508ec95a40b69fedabb06f90c2f96e9ec572fa5e079237aa00020000003504",
+   "error": "code-appairage-invalide"
+  },
+  {
+   "kind": "init",
+   "code": "490293140a57d4b33df45d12d9e8922032156c54eb12f14b237e88c63a8d7304c7f6fa5970efe95ba7e09b8f759bfe61601701000000000013881974551799bf65a1508ec95a40b69fedabb06f90c2f96e9ec572fa5e079237aa00010000003504",
+   "error": "code-appairage-invalide"
+  },
+  {
+   "kind": "response",
+   "code": "56027da59351cd731631053417b144d999627fbcc99e1b64b2688dc4faa603d8f3f698647a006fa3923c5296eb069184b0b4d67c0f63845a0ea7e8e7aa72cb687b00719c368dca4fb0be20d805cf96745c3053",
+   "error": "code-appairage-invalide"
+  },
+  {
+   "kind": "response",
+   "code": "52037da59351cd731631053417b144d999627fbcc99e1b64b2688dc4faa603d8f3f698647a006fa3923c5296eb069184b0b4d67c0f63845a0ea7e8e7aa72cb687b00719c368dca4fb0be20d805cf96745c3053",
+   "error": "version-incompatible"
+  },
+  {
+   "kind": "reveal",
+   "code": "52027da59351cd731631053417b144d999627fbcc99e1b64b2688dc4faa603d8f3f698647a006fa3923c5296eb069184b0b4d67c0f63845a0ea7e8e7aa72cb687b00719c368dca4fb0be20d805cf96745c3053",
+   "error": "code-appairage-invalide"
+  },
+  {
+   "kind": "reveal",
+   "code": "52027da59351cd731631053417b144d999627fbcc99e1b64b2688dc4faa603d8f3f698647a006fa3923c5296eb069184b0b4d67c0f63845a0ea7e8e7aa72cb687b00719c368dca4fb0be20d805cf96745c30",
+   "error": "code-appairage-invalide"
+  }
+ ],
+ "responseCodes": [
+  {
+   "sessionId": "1e1234362c63f1d4a0fb570a2bc90743",
+   "receiverPublicKey": "6c0e7a7c7d2abe74ab32753aa08d00eae16d4f674d3b3c3ce98b6c5ce013c0be85ef93d4ac9d433101c3f3da64d32686821bc9f1a6fc13ea6c14a36de49a5e5a5a",
+   "code": "52021e1234362c63f1d4a0fb570a2bc907436c0e7a7c7d2abe74ab32753aa08d00eae16d4f674d3b3c3ce98b6c5ce013c0be85ef93d4ac9d433101c3f3da64d32686821bc9f1a6fc13ea6c14a36de49a5e5a5a"
+  },
+  {
+   "sessionId": "0ce4e6ef45fbd36ee5b11ef00d51293d",
+   "receiverPublicKey": "65765308182057d1043e7928a1b0704a6c6c3e5b2dfcf336633cefe17cadd59c5cf2fac74d0339c744d2a16ba9f399c76b6e6631dc3256239e04750e6bd379851e",
+   "code": "52020ce4e6ef45fbd36ee5b11ef00d51293d65765308182057d1043e7928a1b0704a6c6c3e5b2dfcf336633cefe17cadd59c5cf2fac74d0339c744d2a16ba9f399c76b6e6631dc3256239e04750e6bd379851e"
+  }
+ ],
+ "revealCodes": [
+  {
+   "sessionId": "37b2305277e9f047bf2a5748f0f72aec",
+   "senderPublicKey": "1c5dbfd5d2d931ac4b59a42abf8655eb13fc02a819e8a1f7a19d73857930779ae58daec3e3047bece9ceb105e4ce4c1c72cbc159b0d7dde2f236ef77e340764700",
+   "code": "560237b2305277e9f047bf2a5748f0f72aec1c5dbfd5d2d931ac4b59a42abf8655eb13fc02a819e8a1f7a19d73857930779ae58daec3e3047bece9ceb105e4ce4c1c72cbc159b0d7dde2f236ef77e340764700"
+  },
+  {
+   "sessionId": "48cd7ebb42918aeeefb40348ecb48d17",
+   "senderPublicKey": "0feddb24bcbd54c265acc1d7dd16562f660eaf8411df127595078be1b24936c0e814398c947f0c27f13e209e6281ec4924e2c834cd7c68e4013e29dba65f4d2e4f",
+   "code": "560248cd7ebb42918aeeefb40348ecb48d170feddb24bcbd54c265acc1d7dd16562f660eaf8411df127595078be1b24936c0e814398c947f0c27f13e209e6281ec4924e2c834cd7c68e4013e29dba65f4d2e4f"
+  }
+ ],
+ "transcripts": [
+  {
+   "init": "49022399863f943ae00a14e9ca905d93bd06a6fa4394bf706279f6ea2422d65a90487e0b3cf454a4a7e3cf20834d91797c330000000000000000d41ee3502b07f95b0beeda9ab9bbc656d9556396eafceb25ec2d02bd0af7da9c00000000000004",
+   "response": "52021e1234362c63f1d4a0fb570a2bc907436c0e7a7c7d2abe74ab32753aa08d00eae16d4f674d3b3c3ce98b6c5ce013c0be85ef93d4ac9d433101c3f3da64d32686821bc9f1a6fc13ea6c14a36de49a5e5a5a",
+   "reveal": "560237b2305277e9f047bf2a5748f0f72aec1c5dbfd5d2d931ac4b59a42abf8655eb13fc02a819e8a1f7a19d73857930779ae58daec3e3047bece9ceb105e4ce4c1c72cbc159b0d7dde2f236ef77e340764700",
+   "hash": "4e027a1ff70c732226d641ce14322521de7bcb7ccdef75baf1ddd32e028e8421"
+  },
+  {
+   "init": "4902dbcb099e21bdaeb4f42be0ed878257d04d0c4efb1052e70c7ba74ba0d8cea2c9a78b9c72cf2d8c382004636e5e538c87000000000001e24039ef8a105395da7167ed4c41f7febdd4c4da5f831bbdcce6d1c4931afbe73b9f00020000050605",
+   "response": "52020ce4e6ef45fbd36ee5b11ef00d51293d65765308182057d1043e7928a1b0704a6c6c3e5b2dfcf336633cefe17cadd59c5cf2fac74d0339c744d2a16ba9f399c76b6e6631dc3256239e04750e6bd379851e",
+   "reveal": "560248cd7ebb42918aeeefb40348ecb48d170feddb24bcbd54c265acc1d7dd16562f660eaf8411df127595078be1b24936c0e814398c947f0c27f13e209e6281ec4924e2c834cd7c68e4013e29dba65f4d2e4f",
+   "hash": "c75c6b6fdac86224c7c0e257be0d8c886c41fb208fd000edf0a863c4c7f08b6d"
+  },
+  {
+   "init": "4902700f7b25ad281cf4dd658abfe16c65c79a62cc2c3c580739eaba3ed943dc99630df9b05893e7dc4565fadd0c37491bf2000000017ffe7ffb144c37cb00f729a3669457738c8a1ac26d614381c6961e52929db56626a114a1ffff03fffc0002",
+   "response": null,
+   "reveal": null,
+   "hash": "178442c5820147b4f7c1073135705053a54ddd78d245de3d1b48f60059c3693b"
+  }
+ ],
+ "keys": [
+  {
+   "secret": "f8e0efa8223320ca405a8298254bf18902516a2053302b8e229a5278fc552aae",
+   "transcript": "a62491f3927c8c66f56442e260d78f3a9132459bc1c0e9b616fcb3f1607de187",
+   "dataKey": "2a3686501be8f5a63eb39eaf0f9b4cee143a532acb3638b517fc8694bae5f978",
+   "nonceKey": "e5346e8a5e7bec3241adc7cfeae98c9c89f736a090ee7d1d00dea9fd771c9c0a",
+   "sas": "906623"
+  },
+  {
+   "secret": "a6d8c6ab076fe41a59667e684263035c00b71d16b8993d10cb4b217bdeb39bf5",
+   "transcript": "eb4d8730eb5414e2a9a5cf655a5b05d61c53ba965c11c819ca02a48c429b02a9",
+   "dataKey": "cddee201baa880713c8357b858b168bf7b176d49661a117b883c62eedcdc8e64",
+   "nonceKey": "7b394ae4068f344796db393d9466798f8437a45c68793f35abd71a6f638c0402",
+   "sas": "738503"
+  },
+  {
+   "secret": "77a909670351acdef3c44bc13b3df2dc338d4b95ab8b465304d6ce0bc23375f8",
+   "transcript": "2934f6d8a8ae5f28c3837b29cde95fe43c486ac674c7b0c73051a78d9456004c",
+   "dataKey": "74f6ca2b596f2c2acdbbf3f26357068be68c6ddbfd8876c7fc0559062e98dbc3",
+   "nonceKey": "554f131a881f06799f0213acc491973d082c35071abc242762e7842b8f9542e3",
+   "sas": "215936"
+  },
+  {
+   "secret": "04f02277a7d03b7a3f8b6dc4210d5ba86fb7b1996d4149800d43aefee5eba640",
+   "transcript": "dcb7f798e9247401bcacc904e47a400b962e4a8c2d20bda10883e0265aa7500a",
+   "dataKey": "9c60295e39d7775c52ff82a265dd0042c596ca21c54d169197efc9af3e79e6f5",
+   "nonceKey": "c4ff64b790afb23065e2a4049d4541b93233bfbb0e8b910ce48ab9cf6590fb2f",
+   "sas": "343062"
+  }
+ ],
+ "passphrases": [
+  {
+   "passphrase": "mont-blanc-2026",
+   "sessionId": "a9b6fc159045aa0ea93d7be0f5cc27d1",
+   "initCode": "4902a9b6fc159045aa0ea93d7be0f5cc27d1ff2c109c1ca845e9d8ccd919ba28782866342d76aa69cab8d28019b75c316c2d00000000000003e8d0d17f8fd5fe9d894c0363bdb8ab9cabe5d19f396b30b9e7f976f3b6e30285d600010000000b06",
+   "secret": "f7ab3c73e09e1f4affc5edd9e5908202980681471cad29d9f964e6e6ae1de4b4",
+   "dataKey": "30ba7294a647030d44af64f7baafd271d77044e94e6c9a31d649be0a8228267d",
+   "nonceKey": "9442ead18c761437b6457e478cea4f82af5bd09c8f62604078a38a5fcc0f9575",
+   "sas": "287191",
+   "error": null
+  },
+  {
+   "passphrase": "optirelay-banc",
+   "sessionId": "f3a5e6e438c02bd25b621e0cc7c7f029",
+   "initCode": "4902f3a5e6e438c02bd25b621e0cc7c7f02902f28e97a19bcc6c38fe5d6ae525c954f5699db958f6c194a5cfe3ff01b7770d00000000000007d002199a8d9aa37f4a433d9a943dd5e91f26ab79bcfe118ef7f87faad095b6932700010000001506",
+   "secret": "702eef67eae878ad8a6956d70905edfbdac0dbab721db167a0d432a40fbeaa30",
+   "dataKey": "f86e60db8f03868963cd6141a6b920293c894b191caaa51b3d7972c046a02479",
+   "nonceKey": "ff31b74f8c909af57a85b014abdc4f03c14925636bdca3d2e209c8bf7efd8848",
+   "sas": "694623",
+   "error": null
+  },
+  {
+   "passphrase": "phrase à accents — éèçà",
+   "sessionId": "695c142c4225edcad61993cd4acdbd52",
+   "initCode": "4902695c142c4225edcad61993cd4acdbd521028d1f83bc71a68e283fe1dc249954e0c7933bd11365535dbb57dc032c376410000000000000bb8dcd80f4a6df4d52af186cc73b035cbd6ca83c704041e4027a2355c6753dccedd00010000002006",
+   "secret": "b86e5c9067b063c9706f9b78a3c3582ad41e167f26db3db85f78cc5a13b93981",
+   "dataKey": "3537d6d48efc5626428c85c0fca0ce21e57e0658fb5653a84456c7efefd24034",
+   "nonceKey": "e9373e1c7c58495bc23b9a5c7f7bdcb002de805e9eaa1a76dbc8f7237361a497",
+   "sas": "517488",
+   "error": null
+  },
+  {
+   "passphrase": "😀😀😀😀",
+   "sessionId": "c612cc9e34dde11c5558fb8a25bff97f",
+   "initCode": "4902c612cc9e34dde11c5558fb8a25bff97f32c2ecd4a1b2708c43d4a55ba239386e1fbd316908659713e2e0d750cee8d74e0000000000000fa063153ac143cae9a28076fca18d3426d02397ceed2ed525e1f36ba4465d56e4e300010000002a06",
+   "secret": "e6d1b64c09d2ed2643872f8122f40c3245c262f8bf8c7393ed638f177f834d41",
+   "dataKey": "56a22dd88a75045cf9661d7a0732b183e9e883c824c54fbc763aa60da588860c",
+   "nonceKey": "3538174ec13512fd8e58622f98a0f7841fe75d3ca605a2431dc540f075a7d1fb",
+   "sas": "812053",
+   "error": null
+  },
+  {
+   "passphrase": "short",
+   "sessionId": "5d290ad35d3eab568b3d397152ec3223",
+   "initCode": "49025d290ad35d3eab568b3d397152ec3223c81973936a542df78d31102a1247008f023bc8324bf438344bd168b0846a9d1e0000000000001388fa31b3f2967006a1becce1accabd9292830d15ebb40dbfa3fec1220bf7bef23700010000003506",
+   "error": "code-appairage-invalide"
+  }
+ ],
+ "nonces": [
+  {
+   "key": "9296695d1abe65bd67a34caef04155f79ebea72d10a519960ad4c4fdc9c0959c",
+   "block": 0,
+   "seed": 1,
+   "nonce": "11dda2d6f82c0cb7122a2661"
+  },
+  {
+   "key": "9296695d1abe65bd67a34caef04155f79ebea72d10a519960ad4c4fdc9c0959c",
+   "block": 3,
+   "seed": 42,
+   "nonce": "2ed5560d27b39f66e293c0ab"
+  },
+  {
+   "key": "9296695d1abe65bd67a34caef04155f79ebea72d10a519960ad4c4fdc9c0959c",
+   "block": 3,
+   "seed": 43,
+   "nonce": "be122b18f52e5b7d9048ab97"
+  },
+  {
+   "key": "9296695d1abe65bd67a34caef04155f79ebea72d10a519960ad4c4fdc9c0959c",
+   "block": 4,
+   "seed": 42,
+   "nonce": "3ac09f12bbb39b48b7ba5f8e"
+  },
+  {
+   "key": "9296695d1abe65bd67a34caef04155f79ebea72d10a519960ad4c4fdc9c0959c",
+   "block": 4294967295,
+   "seed": 4294967295,
+   "nonce": "5c7414fdd9f0974ae0d68261"
+  }
+ ],
+ "tokens": [
+  {
+   "sessionId": "77b26fe607ea6d2fc4f567ae2b6a6d8e",
+   "token": 2008182758
+  },
+  {
+   "sessionId": "01020304ff",
+   "token": 16909060
+  },
+  {
+   "sessionId": "ffffffffffffffffffffffffffffffff",
+   "token": 4294967295
+  }
+ ]
+}

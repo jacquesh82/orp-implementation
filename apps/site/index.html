@@ -4,9 +4,89 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#010101" />
-  <meta name="description" content="OptiRelay moves files from a screen to a camera using TM4 and TM8 temporal modulation, with no transfer network or relay server." />
-  <title>OptiRelay — Light is the only channel</title>
+  <meta name="description" content="Send files from a screen to a camera: no Wi-Fi, no Bluetooth, no server. OptiRelay is an open optical transfer protocol you can try in your browser." />
+  <title>OptiRelay — Screen-to-camera file transfer, no network</title>
+  <link rel="canonical" href="https://orp.mindlog.today/" />
+  <link rel="icon" href="./favicon.ico" sizes="16x16 32x32 48x48" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="OptiRelay" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:url" content="https://orp.mindlog.today/" />
+  <meta property="og:title" content="OptiRelay — Screen-to-camera file transfer, no network" />
+  <meta property="og:description" content="Send files from a screen to a camera: no Wi-Fi, no Bluetooth, no server. An open optical transfer protocol you can try in your browser." />
+  <meta property="og:image" content="https://orp.mindlog.today/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="OptiRelay: screen-to-camera file transfer, with an optical data matrix" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://orp.mindlog.today/#website",
+        "url": "https://orp.mindlog.today/",
+        "name": "OptiRelay",
+        "inLanguage": "en",
+        "publisher": { "@id": "https://orp.mindlog.today/#author" }
+      },
+      {
+        "@type": "Person",
+        "@id": "https://orp.mindlog.today/#author",
+        "name": "Jacques Hullu",
+        "url": "https://github.com/jacquesh82",
+        "sameAs": ["https://github.com/jacquesh82"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://orp.mindlog.today/#app",
+        "name": "OptiRelay",
+        "url": "https://orp.mindlog.today/",
+        "description": "Open optical transfer protocol: send files from a screen to a camera with no Wi-Fi, no Bluetooth and no server.",
+        "applicationCategory": "UtilitiesApplication",
+        "softwareVersion": "0.2",
+        "operatingSystem": "Web browser, Android",
+        "downloadUrl": "https://orp.mindlog.today/download/optirelay.apk",
+        "image": "https://orp.mindlog.today/og-image.png",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+        "author": { "@id": "https://orp.mindlog.today/#author" },
+        "sameAs": [
+          "https://github.com/jacquesh82/orp-implementation",
+          "https://github.com/jacquesh82/orp-specs",
+          "https://www.npmjs.com/package/@optirelay/core"
+        ],
+        "isBasedOn": [
+          { "@id": "https://github.com/jacquesh82/orp-implementation#code" },
+          { "@id": "https://github.com/jacquesh82/orp-specs#code" }
+        ]
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://github.com/jacquesh82/orp-implementation#code",
+        "name": "ORP reference implementations",
+        "description": "TypeScript SDK (@optirelay/core, optical, browser), Rust port and apps of the Optical Relay Protocol.",
+        "codeRepository": "https://github.com/jacquesh82/orp-implementation",
+        "programmingLanguage": ["TypeScript", "Rust"],
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "author": { "@id": "https://orp.mindlog.today/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://github.com/jacquesh82/orp-specs#code",
+        "name": "ORP specifications",
+        "description": "Specification documents and frozen interoperability vectors of the Optical Relay Protocol.",
+        "codeRepository": "https://github.com/jacquesh82/orp-specs",
+        "license": "https://creativecommons.org/licenses/by/4.0/",
+        "author": { "@id": "https://orp.mindlog.today/#author" }
+      }
+    ]
+  }
+  </script>
   <link rel="preload" href="./src/assets/aspekta-400.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="./src/style.css" />
   <script type="module" src="./src/main.ts"></script>
@@ -25,9 +105,9 @@
   </svg>
   <header class="site-header">
     <nav class="header-inner frame" aria-label="Main navigation">
-      <a class="brand" href="#" aria-label="OptiRelay, home"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a>
-      <div class="header-links"><a class="nav-link" href="#principle">How it works</a><a class="nav-link" href="./protocol/">Protocol</a></div>
-      <a class="button button-nav" href="./lab/"><span>Try it</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
+      <a class="brand" href="./" aria-label="OptiRelay, home"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a>
+      <div class="header-links"><a class="nav-link" href="#principle">How it works</a><a class="nav-link" href="./protocol/">Protocol</a><details class="nav-menu"><summary class="nav-link">GitHub<span class="nav-menu-caret" aria-hidden="true">▾</span></summary><div class="nav-menu-panel"><a href="https://github.com/jacquesh82/orp-implementation" rel="noopener"><span class="nav-menu-title">Implementation</span><span class="nav-menu-desc">orp-implementation ↗</span></a><a href="https://github.com/jacquesh82/orp-specs" rel="noopener"><span class="nav-menu-title">Specifications</span><span class="nav-menu-desc">orp-specs ↗</span></a></div></details></div>
+      <a class="button button-nav" href="./studio/"><span>Try it</span><svg aria-hidden="true"><use href="#arrow" /></svg></a>
     </nav>
   </header>
   <main id="content" class="frame main-frame">
@@ -76,8 +156,8 @@
       <div class="hero-copy">
         <p class="tag">Optical transfer · TM4 / TM8</p>
         <h1 id="hero-title">Light is the only channel.</h1>
-        <p class="hero-description">Move files from a screen to a camera, with no network or relay server.</p>
-        <div class="hero-actions"><a class="button button-white" href="./lab/"><span>Try it live</span><svg aria-hidden="true"><use href="#arrow" /></svg></a><a class="button button-outline" href="#principle"><span>How it works</span><svg aria-hidden="true"><use href="#arrow" /></svg></a></div>
+        <p class="hero-description">OptiRelay moves files from a screen to a camera, with no network or relay server.</p>
+        <div class="hero-actions"><a class="button button-white" href="./studio/"><span>Try it live</span><svg aria-hidden="true"><use href="#arrow" /></svg></a><a class="button button-outline" href="#principle"><span>How it works</span><svg aria-hidden="true"><use href="#arrow" /></svg></a></div>
       </div>
     </section>
     <section class="bridge" aria-label="A direct channel between your devices">
@@ -87,7 +167,7 @@
       <p class="tag tag-gray">No Wi-Fi · No Bluetooth · No relay server</p>
     </section>
     <section class="principle" id="principle" aria-labelledby="principle-title">
-      <div class="principle-intro"><div class="intro-content"><p class="tag">The principle · TM4 / TM8</p><h2 id="principle-title">The file changes form.<br />Light makes the connection.</h2><p class="section-description">With TM4 and TM8, OptiRelay turns data into optical matrices. A reference image, then a payload image: the camera reads their difference to reconstruct the file.</p><a class="button button-outline" href="./protocol/"><span>Explore the protocol</span><svg aria-hidden="true"><use href="#arrow" /></svg></a></div></div>
+      <div class="principle-intro"><div class="intro-content"><p class="tag">The principle · TM4 / TM8</p><h2 id="principle-title">The file changes form.<br />Light makes the connection.</h2><p class="section-description">OptiRelay is an open protocol, ORP, with its reference implementations in TypeScript and Rust. With TM4 and TM8, it turns data into optical matrices. A reference image, then a payload image: the camera reads their difference to reconstruct the file.</p><a class="button button-outline" href="./protocol/"><span>Explore the protocol</span><svg aria-hidden="true"><use href="#arrow" /></svg></a></div></div>
       <ol class="steps">
         <li class="step"><div class="step-content"><div class="step-symbol" aria-hidden="true"><svg class="symbol-corners"><use href="#corners" /></svg><svg class="wire-symbol"><use href="#encode" /></svg><span class="step-number">01</span></div><h3>Prepare · TM4</h3><p>The first exchange uses TM4, the more robust mode. Both devices prepare the optical session.</p></div></li>
         <li class="step"><div class="step-content"><div class="step-symbol" aria-hidden="true"><svg class="symbol-corners"><use href="#corners" /></svg><svg class="wire-symbol"><use href="#wave" /></svg><span class="step-number">02</span></div><h3>Display · TM4 / TM8</h3><p>TM4 carries 2 bits per module; TM8 carries 3. Each frame alternates a reference subframe and a payload subframe.</p></div></li>
@@ -96,14 +176,23 @@
       </ol>
       <figure class="convergence" aria-labelledby="convergence-caption"><div class="convergence-art" aria-hidden="true"></div><figcaption id="convergence-caption"><svg aria-hidden="true"><use href="#corners" /></svg><span>A screen. A camera.</span><strong>Light is the only channel.</strong><span>Device to device.</span></figcaption></figure>
     </section>
+    <section class="uses" id="uses" aria-labelledby="uses-title">
+      <div class="uses-heading"><p class="tag tag-gray">Use cases · Offline transfer</p><h2 id="uses-title">When the network<br />is not an option.</h2><p class="section-description">OptiRelay needs a screen and a camera, nothing else: no pairing, no account, no cloud, no shared network between the two devices.</p></div>
+      <ul class="use-list">
+        <li><h3>Isolated machines</h3><p>Take a file off a computer that is deliberately kept off the network. The screen shows it, a phone camera receives it, nothing is plugged in.</p></li>
+        <li><h3>No Wi-Fi, no Bluetooth</h3><p>The two devices share no network and are never paired. The sender is a web page: any screen with a browser can transmit.</p></li>
+        <li><h3>Integrity you can check</h3><p>Every file is verified against its SHA-256 digest before it is released. A shared passphrase can authenticate the session between the two devices.</p></li>
+        <li><h3>Denser than a QR code</h3><p>An animated QR code carries one bit per module. TM4 carries two and TM8 three, read as the difference between a reference image and a payload image.</p></li>
+      </ul>
+    </section>
     <section id="try" class="resources" aria-labelledby="resources-title">
       <div class="plus-divider" aria-hidden="true">+<span>+</span>+<span>+</span>+<span>+</span>+<span>+</span>+<span>+</span>+<span>+</span>+<span>+</span>+</div>
-      <div class="resources-content"><div class="resources-heading"><div><p class="tag tag-gray">Experiment · TM4 / TM8</p><h2 id="resources-title">See the signal.<br />Try the transfer.</h2></div><p>A test bench to explore TM4 and TM8, measure the optical channel and move a file between your devices.</p></div>
-        <ul class="resource-list"><li><a href="./lab/"><span class="resource-tag">Browser</span><span class="resource-title">Open the test bench</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./protocol/#tm4"><span class="resource-tag">TM4</span><span class="resource-title">Explore TM4</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./protocol/#tm8"><span class="resource-tag">TM8</span><span class="resource-title">Explore TM8</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./download/optirelay.apk" download="optirelay.apk"><span class="resource-tag">Android</span><span class="resource-title">Download the Android app</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li></ul>
+      <div class="resources-content"><div class="resources-heading"><div><p class="tag tag-gray">Experiment · TM4 / TM8</p><h2 id="resources-title">See the signal.<br />Try the transfer.</h2></div><p>OptiRelay Studio: put the optical channel through its paces, move a file between your devices, look inside a frame.</p></div>
+        <ul class="resource-list"><li><a href="./studio/"><span class="resource-tag">Browser</span><span class="resource-title">Open OptiRelay Studio</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./protocol/#tm4"><span class="resource-tag">TM4</span><span class="resource-title">Explore TM4</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./protocol/#tm8"><span class="resource-tag">TM8</span><span class="resource-title">Explore TM8</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="./download/optirelay.apk" download="optirelay.apk"><span class="resource-tag">Android</span><span class="resource-title">Download the Android app</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="https://github.com/jacquesh82/orp-implementation" rel="noopener"><span class="resource-tag">GitHub</span><span class="resource-title">Read the implementation source</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li><li><a href="https://github.com/jacquesh82/orp-specs" rel="noopener"><span class="resource-tag">GitHub</span><span class="resource-title">Read the ORP specifications</span><span class="resource-arrow"><svg aria-hidden="true"><use href="#diagonal" /></svg></span></a></li></ul>
         <p id="apk-info" class="download-meta">Android APK · Install on your receiving device to use its camera.</p>
       </div>
     </section>
   </main>
-  <footer class="site-footer frame"><div class="footer-strip"><p>A research project by LeLab</p><a class="brand" href="#" aria-label="OptiRelay, back to top"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a><a class="tag tag-gray" href="./protocol/">ORP protocol <span aria-hidden="true">↗</span></a></div><div class="footer-field" data-wave-field data-wave-reverse aria-hidden="true"></div></footer>
+  <footer class="site-footer frame"><div class="footer-strip"><p>A research project by Jacques Hullu · LeLab<br />ORP v0.2 · Apache-2.0 code, CC BY 4.0 specs</p><a class="brand" href="#" aria-label="OptiRelay, back to top"><svg aria-hidden="true"><use href="#mark" /></svg><span>OptiRelay</span></a><div class="footer-links"><a class="tag tag-gray" href="./protocol/">ORP protocol <span aria-hidden="true">↗</span></a><a class="tag tag-gray" href="https://github.com/jacquesh82/orp-implementation" rel="noopener">Code on GitHub <span aria-hidden="true">↗</span></a><a class="tag tag-gray" href="https://github.com/jacquesh82/orp-specs" rel="noopener">Specifications on GitHub <span aria-hidden="true">↗</span></a></div></div><div class="footer-field" data-wave-field data-wave-reverse aria-hidden="true"></div></footer>
 </body>
 </html>

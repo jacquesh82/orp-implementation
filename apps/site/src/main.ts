@@ -6,6 +6,18 @@ import { animateConvergence } from "./convergence.ts";
 const convergence = document.querySelector<HTMLElement>(".convergence-art");
 if (convergence) animateConvergence(convergence);
 
+// GitHub menu of the header: closes on a click elsewhere or Escape.
+for (const menu of document.querySelectorAll<HTMLDetailsElement>(".nav-menu")) {
+  document.addEventListener("click", (e) => {
+    if (menu.open && !menu.contains(e.target as Node)) menu.open = false;
+  });
+  menu.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !menu.open) return;
+    menu.open = false;
+    menu.querySelector("summary")?.focus();
+  });
+}
+
 // Use the protocol implementation for both the illustration and the Web guide.
 // Local SVGs provide an initial image before this module has loaded.
 for (const [mode, codec] of [["tm4", CODEC.COLOR_4], ["tm8", CODEC.COLOR_8]] as const) {
@@ -30,7 +42,7 @@ for (const [mode, codec] of [["tm4", CODEC.COLOR_4], ["tm8", CODEC.COLOR_8]] as 
 
 const apkInfo = document.getElementById("apk-info");
 if (apkInfo) {
-  // Written by apps/android-lab/rebuild.sh: size in bytes, SHA-256, build date (YYYY-MM-DD).
+  // Written by native/android/rebuild.sh: size in bytes, SHA-256, build date (YYYY-MM-DD).
   void fetch("./download/optirelay.json", { cache: "no-store" })
     .then((response) => response.ok ? response.json() : null)
     .then((metadata: { size?: number; sha256?: string; built?: string } | null) => {

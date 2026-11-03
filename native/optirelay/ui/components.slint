@@ -1,13 +1,13 @@
-// Material 3 components of the app: app bar, bottom navigation bar,
-// buttons, segmented button, icon, setting row, progress bar.
+// Components in the showcase style: square corners, dashed hairlines,
+// uppercase monospace labels, the showcase blue for actions.
 
 import { Theme, Icons } from "theme.slint";
 
 export component Icon inherits Rectangle {
     in property <string> icon-path;
-    in property <brush> tint: Theme.ink;
+    in property <brush> tint: Theme.white;
     in property <length> size: 24px;
-    in property <length> thickness: 2px;
+    in property <length> thickness: 1.5px;
     width: size;
     height: size;
     Path {
@@ -22,317 +22,241 @@ export component Icon inherits Rectangle {
     }
 }
 
-// Round 48 dp icon button (menu, back, close).
+// Dashed hairline frame (Slint has no dashed border): laid over its parent,
+// as wide and high as it. Each side can be turned off.
+export component Dashed inherits Rectangle {
+    in property <color> tint: Theme.border;
+    in property <length> dash: 3px;
+    in property <length> gap: 3px;
+    in property <bool> top: true;
+    in property <bool> bottom: true;
+    in property <bool> left: true;
+    in property <bool> right: true;
+    property <int> nh: max(0, floor(self.width / (root.dash + root.gap)) + 1);
+    property <int> nv: max(0, floor(self.height / (root.dash + root.gap)) + 1);
+    if root.top: Rectangle {
+        x: 0;
+        y: 0;
+        height: 1px;
+        clip: true;
+        for i in root.nh: Rectangle { x: i * (root.dash + root.gap); width: root.dash; height: 1px; background: root.tint; }
+    }
+    if root.bottom: Rectangle {
+        x: 0;
+        y: root.height - 1px;
+        height: 1px;
+        clip: true;
+        for i in root.nh: Rectangle { x: i * (root.dash + root.gap); width: root.dash; height: 1px; background: root.tint; }
+    }
+    if root.left: Rectangle {
+        x: 0;
+        y: 0;
+        width: 1px;
+        clip: true;
+        for i in root.nv: Rectangle { y: i * (root.dash + root.gap); width: 1px; height: root.dash; background: root.tint; }
+    }
+    if root.right: Rectangle {
+        x: root.width - 1px;
+        y: 0;
+        width: 1px;
+        clip: true;
+        for i in root.nv: Rectangle { y: i * (root.dash + root.gap); width: 1px; height: root.dash; background: root.tint; }
+    }
+}
+
+// Horizontal dashed rule, for layouts.
+export component Rule inherits Rectangle {
+    in property <color> tint: Theme.line;
+    height: 1px;
+    Dashed { tint: root.tint; bottom: false; left: false; right: false; }
+}
+
+// Uppercase monospace label (the showcase's `.tag`, `figcaption`).
+export component Label inherits Text {
+    in property <bool> accent: false;
+    font-family: Theme.mono;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+    color: root.accent ? Theme.accent-text : Theme.dim;
+}
+
+// Tag on a grey ground ("ORP V0.2").
+export component Tag inherits Rectangle {
+    in property <string> text;
+    in property <color> ground: Theme.gray;
+    in property <color> ink: Theme.white;
+    height: 20px;
+    width: tag-text.preferred-width + 12px;
+    background: root.ground;
+    tag-text := Text {
+        text: root.text;
+        font-family: Theme.mono;
+        font-size: 10px;
+        color: root.ink;
+        vertical-alignment: center;
+    }
+}
+
+// The OptiRelay mark: three finder squares and a module, as on the showcase.
+export component Mark inherits Rectangle {
+    in property <length> size: 22px;
+    in property <color> tint: Theme.white;
+    width: size;
+    height: size;
+    property <length> cell: (root.size - 4px) / 2;
+    Rectangle { x: 0; y: 0; width: parent.cell; height: parent.cell; border-width: 1.5px; border-color: root.tint; }
+    Rectangle { x: parent.cell + 4px; y: 0; width: parent.cell; height: parent.cell; border-width: 1.5px; border-color: root.tint; }
+    Rectangle { x: 0; y: parent.cell + 4px; width: parent.cell; height: parent.cell; border-width: 1.5px; border-color: root.tint; }
+    Rectangle { x: parent.cell + 5px; y: parent.cell + 5px; width: parent.cell - 2px; height: parent.cell - 2px; background: root.tint; }
+}
+
+// Square 48 dp icon button (back, close).
 export component IconButton inherits Rectangle {
     in property <string> icon-path;
-    in property <brush> tint: Theme.ink;
     in property <string> label;
     callback click();
     width: 48px;
     height: 48px;
-    border-radius: 24px;
-    background: zone.pressed ? #10141822 : transparent;
+    background: zone.pressed ? #ffffff1f : transparent;
     accessible-role: button;
     accessible-label: label;
     accessible-action-default => { root.click(); }
-    Icon {
-        icon-path: root.icon-path;
-        tint: root.tint;
-    }
-    zone := TouchArea {
-        clicked => { root.click(); }
-    }
+    Icon { icon-path: root.icon-path; size: 22px; }
+    zone := TouchArea { clicked => { root.click(); } }
 }
 
-// App bar (small, Material 3): navigation action, title, extras.
-export component AppBar inherits Rectangle {
+// Top bar: back (or close), uppercase title, extras on the right; dashed
+// rule underneath, like the showcase header.
+export component TopBar inherits Rectangle {
     in property <string> title;
-    in property <string> icon-path: Icons.menu;
-    in property <string> label: "Open menu";
-    in property <bool> dark: false;
+    in property <string> icon-path: Icons.back;
+    in property <string> label: "Back";
     callback navigation();
-    height: 64px;
-    background: transparent;
+    height: 53px;
+    background: Theme.black;
     HorizontalLayout {
         padding-left: 4px;
         padding-right: 12px;
-        spacing: 4px;
-        alignment: start;
-        IconButton {
-            y: 8px;
-            icon-path: root.icon-path;
-            label: root.label;
-            tint: root.dark ? Theme.light : Theme.ink;
-            click => { root.navigation(); }
-        }
+        spacing: 6px;
+        IconButton { y: 2px; icon-path: root.icon-path; label: root.label; click => { root.navigation(); } }
         Text {
             text: root.title;
-            font-size: root.dark ? 20px : 22px;
-            font-weight: 500;
-            color: root.dark ? Theme.light : Theme.ink;
+            font-family: Theme.mono;
+            font-size: 12px;
+            letter-spacing: 0.6px;
+            color: Theme.white;
             vertical-alignment: center;
             horizontal-stretch: 1;
         }
         @children
     }
+    Dashed { top: false; left: false; right: false; }
 }
 
-// Badge "Offline" / "Calibrated" / "White + exposure locked".
-export component Badge inherits Rectangle {
-    in property <string> text;
-    in property <string> icon-path: Icons.checked;
-    in property <color> badge-background: Theme.ok-pale;
-    in property <color> badge-ink: Theme.ok-ink;
-    height: 32px;
-    border-radius: 8px;
-    background: badge-background;
-    HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 12px;
-        spacing: 6px;
-        alignment: center;
-        Icon {
-            y: (32px - 16px) / 2;
-            icon-path: root.icon-path;
-            size: 16px;
-            tint: root.badge-ink;
-            thickness: 2.5px;
-        }
-        Text {
-            text: root.text;
-            font-size: 13px;
-            font-weight: 500;
-            color: root.badge-ink;
-            vertical-alignment: center;
-        }
-    }
-}
-
-// Filled button (56 dp, round), tonal button, outlined button, text button.
+// Action button (the showcase's `.button`): uppercase mono label, the icon
+// in a square cell after a dashed separator. primary: blue; white; outline:
+// dashed frame on black.
 export component Button inherits Rectangle {
     in property <string> text;
-    in property <string> icon-path;
-    in property <string> kind: "filled"; // filled | tonal | outlined | text | danger
+    in property <string> icon-path: Icons.arrow;
+    in property <string> kind: "primary"; // primary | white | outline
     in property <bool> active: true;
-    in property <length> control-height: 56px;
-    in property <bool> dark: false;
+    in property <length> control-height: 48px;
     callback click();
     height: control-height;
-    border-radius: control-height / 2;
-    background: !active ? (dark ? Theme.night-stroke : Theme.surface-variant)
-        : kind == "filled" ? (zone.pressed ? Theme.on-primary-container : Theme.primary)
-        : kind == "tonal" ? Theme.primary-container
-        : zone.pressed ? #10141814 : transparent;
-    border-width: kind == "outlined" || kind == "danger" ? 1px : 0px;
-    border-color: kind == "danger" ? Theme.divider : Theme.outline;
+    property <bool> down: zone.pressed && root.active;
+    background: !root.active ? Theme.gray
+        : root.kind == "primary" ? (root.down ? Theme.white : Theme.blue)
+        : root.kind == "white" ? (root.down ? Theme.black : Theme.white)
+        : (root.down ? Theme.white : transparent);
+    property <color> ink: !root.active ? Theme.dim
+        : root.kind == "primary" ? (root.down ? Theme.black : Theme.white)
+        : root.kind == "white" ? (root.down ? Theme.white : Theme.blue)
+        : (root.down ? Theme.black : Theme.white);
     accessible-role: button;
     accessible-label: text;
     accessible-enabled: active;
-    accessible-action-default => { if active { root.click(); } }
-    property <color> button-ink: !active ? Theme.outline
-        : kind == "filled" ? white
-        : kind == "tonal" ? Theme.on-primary-container
-        : kind == "danger" ? Theme.danger
-        : dark ? Theme.night-link : Theme.primary;
+    accessible-action-default => { if root.active { root.click(); } }
     HorizontalLayout {
-        alignment: center;
-        spacing: 10px;
-        padding-left: 16px;
-        padding-right: 16px;
-        if root.icon-path != "": Icon {
-            y: (root.control-height - 20px) / 2;
-            icon-path: root.icon-path;
-            size: 20px;
-            tint: root.button-ink;
-            thickness: 2.2px;
-        }
+        padding-left: 14px;
+        spacing: 12px;
         Text {
             text: root.text;
-            font-size: root.control-height >= 56px ? 16px : 15px;
-            font-weight: 600;
-            color: root.button-ink;
+            font-family: Theme.mono;
+            font-size: 12px;
+            letter-spacing: 0.4px;
+            color: root.ink;
             vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        if root.icon-path != "": Rectangle {
+            width: root.control-height;
+            Icon { icon-path: root.icon-path; size: 18px; tint: root.ink; }
+            Dashed {
+                tint: root.kind == "white" ? Theme.blue : Theme.line-strong;
+                top: false;
+                bottom: false;
+                right: false;
+            }
         }
     }
+    if root.kind == "outline": Dashed { tint: Theme.line-strong; }
     zone := TouchArea {
         enabled: root.active;
         clicked => { root.click(); }
     }
 }
 
-// Segmented button (2 choices), light or dark.
-export component Segmented inherits Rectangle {
+// Two-choice selector (TM4 / TM8): the choice in blue, the other dashed.
+export component Choice inherits HorizontalLayout {
     in property <string> left-label;
     in property <string> right-label;
     in-out property <int> choice: 0;
-    in property <bool> dark: false;
-    in property <length> control-height: 48px;
-    callback change(int);
-    height: control-height;
-    border-radius: control-height / 2;
-    border-width: 1px;
-    border-color: dark ? Theme.night-outline : Theme.outline;
-    clip: true;
-    HorizontalLayout {
-        padding: 1px;
-        for label[i] in [root.left-label, root.right-label]: Rectangle {
-            property <bool> selected: root.choice == i;
-            property <length> rayon: root.control-height / 2 - 1px;
-            width: (root.width - 2px) / 2;
-            background: selected ? (root.dark ? Theme.night-blue : Theme.primary-container) : transparent;
-            border-top-left-radius: i == 0 ? rayon : 0;
-            border-bottom-left-radius: i == 0 ? rayon : 0;
-            border-top-right-radius: i == 1 ? rayon : 0;
-            border-bottom-right-radius: i == 1 ? rayon : 0;
-            accessible-role: button;
-            accessible-label: label;
-            accessible-checked: selected;
-            HorizontalLayout {
-                alignment: center;
-                spacing: 6px;
-                padding-left: 12px;
-                padding-right: 12px;
-                if selected && !root.dark: Icon {
-                    y: (root.control-height - 18px) / 2;
-                    icon-path: Icons.checked;
-                    size: 18px;
-                    tint: Theme.on-primary-container;
-                    thickness: 2.5px;
-                }
-                Text {
-                    text: label;
-                    font-size: root.dark ? 13px : 15px;
-                    font-weight: 500;
-                    vertical-alignment: center;
-                    color: selected ? (root.dark ? #dbe6fb : Theme.on-primary-container) : (root.dark ? Theme.soft-light : Theme.ink);
-                }
-            }
-            TouchArea {
-                clicked => {
-                    root.choice = i;
-                    root.change(i);
-                }
-            }
+    spacing: 8px;
+    height: 44px;
+    for label[i] in [root.left-label, root.right-label]: Rectangle {
+        property <bool> selected: root.choice == i;
+        horizontal-stretch: 1;
+        background: selected ? Theme.blue : transparent;
+        accessible-role: button;
+        accessible-label: label;
+        accessible-checked: selected;
+        Text {
+            text: label;
+            font-family: Theme.mono;
+            font-size: 12px;
+            color: selected ? Theme.white : Theme.muted;
         }
+        if !selected: Dashed { tint: Theme.line-strong; }
+        TouchArea { clicked => { root.choice = i; } }
     }
 }
 
-// Bottom navigation bar (Material 3): 3 destinations.
-export component BottomNav inherits Rectangle {
-    in-out property <int> current-tab: 0;
-    callback choose(int);
-    height: 80px;
-    background: Theme.surface-container;
-    HorizontalLayout {
-        for item[i] in [
-            { label: "Receive", icon-path: Icons.camera },
-            { label: "Send", icon-path: Icons.screen },
-            { label: "Test bench", icon-path: Icons.bench },
-        ]: Rectangle {
-            property <bool> selected: root.current-tab == i;
-            accessible-role: tab;
-            accessible-label: item.label;
-            accessible-checked: selected;
-            VerticalLayout {
-                alignment: center;
-                spacing: 4px;
-                HorizontalLayout {
-                    alignment: center;
-                    Rectangle {
-                        width: 64px;
-                        height: 32px;
-                        border-radius: 16px;
-                        background: selected ? Theme.indicator : transparent;
-                        Icon {
-                            icon-path: item.icon-path;
-                            tint: selected ? Theme.on-primary-container : Theme.soft;
-                        }
-                    }
-                }
-                Text {
-                    text: item.label;
-                    horizontal-alignment: center;
-                    font-size: 12px;
-                    font-weight: selected ? 600 : 500;
-                    color: selected ? Theme.ink : Theme.soft;
-                }
-            }
-            TouchArea {
-                clicked => { root.choose(i); }
-            }
-        }
-    }
-}
-
-// Setting row (title, value, chevron).
-export component SettingRow inherits Rectangle {
-    in property <string> title;
-    in property <string> value;
-    callback click();
-    min-height: 64px;
-    background: zone.pressed ? #10141808 : transparent;
-    accessible-role: button;
-    accessible-label: title + ": " + value;
-    HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 16px;
-        spacing: 16px;
-        VerticalLayout {
-            alignment: center;
-            spacing: 2px;
-            horizontal-stretch: 1;
-            Text { text: root.title; font-size: 16px; color: Theme.ink; }
-            Text { text: root.value; font-size: 14px; color: Theme.soft; }
-        }
-        Icon {
-            y: (root.height - 20px) / 2;
-            icon-path: Icons.chevron;
-            size: 20px;
-            tint: Theme.soft;
-        }
-    }
-    zone := TouchArea {
-        clicked => { root.click(); }
-    }
-}
-
-export component Separator inherits Rectangle {
-    in property <bool> dark: false;
-    height: 1px;
-    background: dark ? Theme.night-stroke : Theme.surface-variant;
-}
-
-// Progress bar (8 dp).
+// Progress bar: square, accent fill on a faint track.
 export component Progress inherits Rectangle {
     in property <float> part; // 0..1
-    in property <bool> dark: false;
-    in property <color> tint: dark ? Theme.light-blue : Theme.primary;
-    height: 8px;
-    border-radius: 4px;
-    background: dark ? Theme.night-stroke : Theme.divider;
-    clip: true;
+    height: 4px;
+    background: #ffffff1f;
     accessible-role: progress-indicator;
     accessible-value: round(part * 100) + "%";
     Rectangle {
         x: 0;
         width: parent.width * clamp(root.part, 0, 1);
-        border-radius: 4px;
-        background: root.tint;
+        background: Theme.accent;
     }
 }
 
-// Key figure: label above, value in monospace.
-export component Encrypted inherits VerticalLayout {
+// Key figure: uppercase label above, value in monospace.
+export component Figure inherits VerticalLayout {
     in property <string> tag;
     in property <string> value;
-    in property <bool> dark: false;
-    spacing: 2px;
-    Text { text: root.tag; font-size: 12px; color: root.dark ? Theme.soft-light : Theme.soft; }
-    Text { text: root.value; font-size: 17px; font-family: Theme.mono; color: root.dark ? Theme.light : Theme.ink; }
+    spacing: 4px;
+    Label { text: root.tag; font-size: 10px; }
+    Text { text: root.value; font-size: 15px; font-family: Theme.mono; color: Theme.white; overflow: elide; }
 }
 
 // Completeness of a file, block by block: one vertical bar per block,
-// green once the block is decoded, blue as it fills up.
+// green once the block is decoded, accent blue as it fills up.
 export struct BlockView {
     part: float,
     complete: bool,
@@ -340,15 +264,13 @@ export struct BlockView {
 
 export component BlockBars inherits Rectangle {
     in property <[BlockView]> blocks;
-    in property <bool> dark: true;
-    in property <length> control-height: 36px;
+    in property <length> control-height: 22px;
     height: control-height;
     HorizontalLayout {
-        spacing: root.blocks.length > 24 ? 1px : 4px;
+        spacing: root.blocks.length > 24 ? 1px : 3px;
         for b[i] in root.blocks: Rectangle {
             horizontal-stretch: 1;
-            border-radius: 3px;
-            background: root.dark ? Theme.night-stroke : Theme.surface-variant;
+            background: #ffffff1f;
             clip: true;
             accessible-role: progress-indicator;
             accessible-label: "Block " + (i + 1);
@@ -357,7 +279,7 @@ export component BlockBars inherits Rectangle {
                 y: parent.height * (1 - b.part);
                 width: parent.width;
                 height: parent.height * b.part;
-                background: b.complete ? Theme.green : Theme.light-blue;
+                background: b.complete ? Theme.ok : Theme.accent;
             }
         }
     }

@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      esbuild:
+        specifier: 0.21.5
+        version: 0.21.5
       typescript:
         specifier: 5.6.3
         version: 5.6.3
@@ -78,13 +81,67 @@ importers:
         specifier: ^5.4.0
         version: 5.4.21
 
+  examples/hello-world:
+    dependencies:
+      '@optirelay/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@optirelay/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@vitejs/plugin-basic-ssl':
+        specifier: '1'
+        version: 1.2.0(vite@5.4.21)
+      vite:
+        specifier: ^5.4.0
+        version: 5.4.21
+
+  examples/secure-hello-world:
+    dependencies:
+      '@optirelay/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@optirelay/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@vitejs/plugin-basic-ssl':
+        specifier: '1'
+        version: 1.2.0(vite@5.4.21)
+      vite:
+        specifier: ^5.4.0
+        version: 5.4.21
+
+  examples/studio:
+    dependencies:
+      '@optirelay/browser':
+        specifier: ^0.2.2
+        version: 0.2.2
+      '@optirelay/core':
+        specifier: ^0.2.0
+        version: 0.2.0
+      '@optirelay/optical':
+        specifier: ^0.2.1
+        version: 0.2.1
+    devDependencies:
+      '@vitejs/plugin-basic-ssl':
+        specifier: ^1.2.0
+        version: 1.2.0(vite@5.4.21)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^5.4.21
+        version: 5.4.21
+
   packages/browser:
     dependencies:
       '@optirelay/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       '@optirelay/optical':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../optical
 
   packages/core: {}
@@ -104,7 +161,7 @@ importers:
   packages/optical:
     dependencies:
       '@optirelay/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
 
 packages:
@@ -264,6 +321,18 @@ packages:
     engines: {node: ^22.20 || ^24.12 || >=25}
     cpu: [x64]
     os: [linux]
+
+  '@optirelay/browser@0.2.2':
+    resolution: {integrity: sha512-Ezy/q/DoeuJUQgeRe9f9Y/iOgiuZcGuegtMKHyvPk999Rn9AJGgzmP6+qujGd+UeqmqI9G3pdp66aIli3K6ryA==}
+    engines: {node: '>=20'}
+
+  '@optirelay/core@0.2.0':
+    resolution: {integrity: sha512-Gf2pRZSsH9asTFtJxHS+MuNCAvauQUq9zwUO5h1mP6DLoanMg4s79Emexv+CO4Hl5bb95C050txclcxQQ0zRvg==}
+    engines: {node: '>=20'}
+
+  '@optirelay/optical@0.2.1':
+    resolution: {integrity: sha512-lplrwBzBikXZDl9XiO9DH3go5jBrO23Y9W5FF0poFj2hzgITdxWtq6jYsSzh6CZkIUPF1r/tLA1SvvfCFvOwJA==}
+    engines: {node: '>=20'}
 
   '@rollup/rollup-android-arm-eabi@4.67.2':
     resolution: {integrity: sha512-qB7Gzl1QI45zP1zXgqLKzjFmOBGQw2s2MLtdw0eB4xdFGPNE8LhmOnItFgyYJXXNSW8Go9c2ovvXrUUzw5sAMQ==}
@@ -551,6 +620,11 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   vite-node@2.1.9:
     resolution: {integrity: sha512-AM9aQ/IPrW/6ENLQg3AGY4K1N2TGZdR5e4gu/MmmR2xR3Ll1+dib+nook92g4TV3PXVyeyxdWwtaCAiUL0hMxA==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -698,6 +772,17 @@ snapshots:
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
+
+  '@optirelay/browser@0.2.2':
+    dependencies:
+      '@optirelay/core': 0.2.0
+      '@optirelay/optical': 0.2.1
+
+  '@optirelay/core@0.2.0': {}
+
+  '@optirelay/optical@0.2.1':
+    dependencies:
+      '@optirelay/core': 0.2.0
 
   '@rollup/rollup-android-arm-eabi@4.67.2':
     optional: true
@@ -954,6 +1039,8 @@ snapshots:
   tinyspy@3.0.2: {}
 
   typescript@5.6.3: {}
+
+  typescript@5.9.3: {}
 
   vite-node@2.1.9:
     dependencies:

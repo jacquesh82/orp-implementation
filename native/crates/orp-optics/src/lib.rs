@@ -29,7 +29,7 @@ pub use calibration::{calibrate, validate_mode};
 pub use pipeline::{TmPipeline, PipelineStats};
 pub use cielab::{classifier, distance_lab, rgb_to_lab, Classification, Lab};
 pub use decoder::{
-    affine_from_triplet, apply_affine, choose_triplet, decode_with_affine, decode_grid,
+    affine_from_triplet, apply_affine, choose_triplet, choose_triplets, decode_with_affine, decode_grid,
     detect_markers, sample, luminance, otsu_threshold, Affine, MarkerCandidate,
     DecodeOptions, CalibratedPalette, DecodeResult, DetectionThreshold, Triplet,
 };

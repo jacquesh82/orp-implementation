@@ -2,8 +2,9 @@
 
 Exercise of the **implementation guide** (§10 of the ORP v0.1 draft): play the role of
 the third-party developer who has read **neither the TypeScript reference code nor its
-Rust port**. The implementation was written from `docs/rfc/draft-orp-v0.1.md` (the memo)
-and `native/vectors/core/*.json` only; the vectors are the sole arbiter.
+Rust port**. The implementation was written from the v0.1 memo (`draft-orp-v0.1.md` in
+[`orp-specs`](https://github.com/jacquesh82/orp-specs)) and `native/vectors/core/*.json`
+only; the vectors are the sole arbiter.
 
 ## Result
 
@@ -22,6 +23,17 @@ and `native/vectors/core/*.json` only; the vectors are the sole arbiter.
 | 9 | Complete sessions | 5 end-to-end scenarios |
 
 Item 10 (optical layer) requires real hardware — out of the scope of this exercise (B-4).
+
+## Update to ORP v0.2 (2026-11-02)
+
+The package now replays the **v0.2** vectors (`docs/orp-protocol-v0.2.md`): typed and
+versioned pairing codes (init 97 B with a commitment to the sender key, response 83 B,
+reveal 83 B), keys and SAS derived with salt = transcript hash, passphrase stretched by
+PBKDF2-HMAC-SHA-256 (600,000 iterations, `hashlib.pbkdf2_hmac`), encryption announced by
+the init code and enforced on every frame, frames checked against the announced block
+layout. The passphrase minimum is now counted in UTF-16 code units, as the specification
+says (finding I-2 below is closed by §7.2 of v0.2). The findings log below is the one of
+the original v0.1 exercise.
 
 ## Replaying
 

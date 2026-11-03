@@ -45,20 +45,35 @@ export {
 } from "./encryption.ts";
 export {
   deriveKeys,
+  deriveKeysFromPassphrase,
   deriveSecretFromPassphrase,
+  commitmentOf,
+  transcriptHash,
+  expectedLayout,
+  expectedK,
   wipeKeys,
   writeInitCode,
   writeResponseCode,
+  writeRevealCode,
   tokenOf,
   readInitCode,
   readResponseCode,
+  readRevealCode,
+  pairingCodeKind,
   frameNonce,
+  CODE_KIND,
+  CODE_VERSION,
+  INIT_FLAG,
   INIT_CODE_SIZE,
   RESPONSE_CODE_SIZE,
+  REVEAL_CODE_SIZE,
+  COMMITMENT_SIZE,
   ECDH_PUBLIC_KEY_SIZE,
   SESSION_ID_SIZE,
+  PASSPHRASE_ITERATIONS,
+  PASSPHRASE_MIN_LENGTH,
 } from "./pairing.ts";
 export type { SessionKeys, InitCodeInfo } from "./pairing.ts";
 export { compress, decompress } from "./compression.ts";
-export { Events, SenderSession, ReceiverSession } from "./session.ts";
-export type { SessionState, TransmissionOptions, ReceiveProgress, FrameStatus } from "./session.ts";
+export { Events, SenderSession, ReceiverSession, DEFAULT_MAX_FILE_SIZE } from "./session.ts";
+export type { SessionState, TransmissionOptions, ReceptionOptions, ReceiveProgress, FrameStatus } from "./session.ts";

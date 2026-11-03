@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         home: fileURLToPath(new URL("./index.html", import.meta.url)),
         protocol: fileURLToPath(new URL("./protocol/index.html", import.meta.url)),
+        notFound: fileURLToPath(new URL("./404.html", import.meta.url)),
       },
     },
   },

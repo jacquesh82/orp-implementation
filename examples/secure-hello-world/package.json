@@ -1,0 +1,20 @@
+{
+  "name": "@optirelay/example-secure-hello-world",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OptiRelay example — Secure Hello world: one page, two devices, a message sent through the screen and the camera.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@optirelay/browser": "workspace:*",
+    "@optirelay/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "1",
+    "vite": "^5.4.0"
+  }
+}

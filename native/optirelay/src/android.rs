@@ -1,6 +1,7 @@
-//! JNI bridge with the Kotlin host (`MainActivity`, NativeActivity): what only
-//! Android's Java API offers — slow-motion shooting in a high-speed session,
-//! camera permission, color of the system bar icons.
+//! JNI bridge with the Kotlin host (`MainActivity`, NativeActivity): only what
+//! needs an activity callback or the UI thread — camera permission (its
+//! answer), the file picker (its result), saving and sharing the received
+//! file, the screen brightness while sending.
 //!
 //! Rust → Kotlin: method calls on the activity (`ndk_context`).
 //! Kotlin → Rust: the `Java_…` functions below, brought back onto the Slint
@@ -63,32 +64,10 @@ fn with_activity<R>(f: impl FnOnce(&mut JNIEnv, &JObject) -> jni::errors::Result
     }
 }
 
-/// Opens the slow-motion shooting screen; the result comes back through `slowMotionFinished`.
-/// `target`: advised duration (s, 0 if none), towards which the bar
-/// fills; `instruction`: text shown before filming.
-pub fn film_slow_motion(max_seconds: i32, target: i32, instruction: &str) {
-    with_activity(|env, a| {
-        let instruction = env.new_string(instruction)?;
-        env.call_method(a, "filmSlowMotion", "(IILjava/lang/String;)V", &[JValue::Int(max_seconds), JValue::Int(target), (&instruction).into()])
-            .map(|_| ())
-    });
-}
-
 /// Requests the camera if needed; the answer comes back through `cameraPermissionResult`.
 pub fn request_camera() {
     log("requesting camera access");
     with_activity(|env, a| env.call_method(a, "requestCamera", "()V", &[]).map(|_| ()));
-}
-
-/// System bar icons: dark on a light screen, light on a dark screen.
-pub fn light_bars(light: bool) {
-    with_activity(|env, a| env.call_method(a, "lightBars", "(Z)V", &[JValue::Bool(light.into())]).map(|_| ()));
-}
-
-#[no_mangle]
-pub extern "system" fn Java_fr_lelab_optirelay_natif_MainActivity_slowMotionFinished(mut env: JNIEnv, _class: JClass, json: JString) {
-    let text: String = env.get_string(&json).map(Into::into).unwrap_or_default();
-    let _ = slint::invoke_from_event_loop(move || crate::slow_motion_finished(&text));
 }
 
 #[no_mangle]
@@ -119,11 +98,6 @@ pub fn max_brightness(max: bool) {
     with_activity(|env, a| env.call_method(a, "maxBrightness", "(Z)V", &[JValue::Bool(max.into())]).map(|_| ()));
 }
 
-/// Highest refresh rate the screen can display (Hz); 60 if unknown.
-pub fn max_frequency() -> f32 {
-    with_activity(|env, a| env.call_method(a, "maxFrequency", "()F", &[])?.f()).unwrap_or(60.0)
-}
-
 #[no_mangle]
 pub extern "system" fn Java_fr_lelab_optirelay_natif_MainActivity_fileChosen(
     mut env: JNIEnv,
@@ -148,9 +122,4 @@ pub fn share(name: &str, mime_type: &str, bytes: &[u8]) -> bool {
             .z()
     })
     .unwrap_or(false)
-}
-
-/// Android video picker; the copied video comes back through `slowMotionFinished`.
-pub fn choose_video() {
-    with_activity(|env, a| env.call_method(a, "chooseVideo", "()V", &[]).map(|_| ()));
 }
